@@ -32,5 +32,11 @@ problems surface as clear `vim.notify` messages naming the file/step.
 - [ ] `>>`, code-injection, and `command:` syntax render inert — nothing runs or edits.
 - [ ] A `degradation` integration spec drives malformed fixtures and asserts no crash.
 
+## Carried over from NCT-001 review
+- A file step pointing at a **nonexistent path** silently opens an empty
+  `[New File]` buffer with no notice. The window-safety + pcall hardening already
+  prevents a crash; this story should add the **notify** leg ("step N: file X not
+  found") so the degradation is visible, per "degrade, notify, continue."
+
 ## Blocked by
 - NCT-001

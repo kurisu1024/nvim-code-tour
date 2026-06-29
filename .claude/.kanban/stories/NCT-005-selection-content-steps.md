@@ -27,5 +27,11 @@ highlight. Both flow through the existing anchor/player/renderer seams.
 - [ ] Navigating into and out of a content step leaves prior highlights cleaned up.
 - [ ] Anchor resolution for selection/content tested as pure functions.
 
+## Carried over from NCT-001 review
+- Content steps currently render the float but wire **no** buffer-local nav maps
+  (`]t`/`[t`/`q` are dead unless the float is focused), because the player's
+  render dispatch only sets maps in the file-step branch. Wire nav maps for
+  content steps as part of this story's content-step handling.
+
 ## Blocked by
 - NCT-001

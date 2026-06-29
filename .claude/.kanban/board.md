@@ -27,12 +27,12 @@ _(empty)_
 
 ## review
 
+_(empty)_
+
+## done
+
 ### EPIC-001 · nvim-code-tour ◆
 
 | ID | Title | Pri | Size | Blocked by |
 |----|-------|-----|------|-----------|
 | NCT-001 | Walking skeleton — file+line playback | ◆ | M | — |
-
-## done
-
-_(empty)_
