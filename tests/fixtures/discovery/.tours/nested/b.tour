@@ -1,0 +1,6 @@
+{
+  "title": "Beta",
+  "steps": [
+    { "file": "src/b.lua", "line": 1, "description": "nested tour step" }
+  ]
+}

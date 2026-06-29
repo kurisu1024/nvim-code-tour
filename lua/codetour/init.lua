@@ -26,7 +26,13 @@ local function resolve_root(opts)
   end
   local name = vim.api.nvim_buf_get_name(0)
   local start = name ~= "" and name or vim.fn.getcwd()
-  return vim.fs.root(start, ".git") or vim.fn.getcwd()
+  -- Git-root-then-cwd resolution lives in discovery (the engine owns it).
+  return discovery.resolve_root(start)
+end
+
+-- The configured extra directory beyond the conventional locations.
+local function find_opts()
+  return { tour_dir = config.get().tour_dir }
 end
 
 local function load_tour(path)
@@ -51,7 +57,7 @@ end
 function M.start(opts)
   opts = opts or {}
   local root = resolve_root(opts)
-  local tours = discovery.find(root)
+  local tours = discovery.find(root, find_opts())
   if #tours == 0 then
     vim.notify("codetour: no tours found under " .. root, vim.log.levels.INFO)
     return
@@ -71,15 +77,17 @@ end
 
 function M.list()
   local root = resolve_root({})
-  local tours = discovery.find(root)
+  local tours = discovery.find(root, find_opts())
   if #tours == 0 then
     vim.notify("codetour: no tours found under " .. root, vim.log.levels.INFO)
     return
   end
-  local names = vim.tbl_map(function(t)
-    return "  " .. vim.fn.fnamemodify(t.path, ":.")
+  local lines = vim.tbl_map(function(t)
+    local steps = string.format("%d step%s", t.step_count, t.step_count == 1 and "" or "s")
+    local primary = t.is_primary and " (primary)" or ""
+    return string.format("  %s  [%s]%s — %s", t.title, steps, primary, vim.fn.fnamemodify(t.path, ":."))
   end, tours)
-  vim.notify("codetour: tours found:\n" .. table.concat(names, "\n"), vim.log.levels.INFO)
+  vim.notify("codetour: tours found:\n" .. table.concat(lines, "\n"), vim.log.levels.INFO)
 end
 
 -- Delegate the navigation surface to the player.

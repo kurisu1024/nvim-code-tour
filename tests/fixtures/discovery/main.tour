@@ -1,0 +1,7 @@
+{
+  "title": "Main",
+  "steps": [
+    { "description": "root main.tour step one" },
+    { "description": "root main.tour step two" }
+  ]
+}
