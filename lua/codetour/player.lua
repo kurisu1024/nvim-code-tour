@@ -8,6 +8,7 @@
 -- memory so resume() re-enters where you left off.
 
 local config = require("codetour.config")
+local git = require("codetour.core.git")
 local markdown = require("codetour.core.markdown")
 local codewin = require("codetour.ui.codewin")
 local highlight = require("codetour.ui.highlight")
@@ -23,7 +24,31 @@ local state = {
   hl_buf = nil, -- buffer currently carrying the line highlight
   map_buf = nil, -- buffer currently carrying nav maps
   renderer = nil,
+  drift_notified = false, -- one git-ref drift notice per activation
 }
+
+-- When the tour pins a `ref`, compare it to HEAD and emit a single non-blocking
+-- notice on drift. Read-only and never mutates the tree (see core.git). The
+-- check runs at most once per activation: the flag is set up front so a slow or
+-- failing git call can never re-fire on every navigation, and match / no-repo
+-- stay silent.
+local function maybe_notify_drift()
+  if state.drift_notified then
+    return
+  end
+  local ref = state.tour and state.tour.ref
+  if not ref or ref == "" then
+    return
+  end
+  state.drift_notified = true
+  local ok, status = pcall(git.status, ref, { cwd = state.root })
+  if not ok or type(status) ~= "table" then
+    return
+  end
+  if status.state == "drift" then
+    vim.notify(git.drift_message(status), vim.log.levels.WARN)
+  end
+end
 
 local function clear_maps()
   if state.map_buf and vim.api.nvim_buf_is_valid(state.map_buf) then
@@ -70,6 +95,7 @@ end
 
 -- Render the current step end to end.
 local function render()
+  maybe_notify_drift()
   local step = state.tour.steps[state.index]
 
   if step.type == "file" and step.file then
@@ -111,6 +137,7 @@ function M.start(tour, opts)
   teardown_ui()
   state.tour = tour
   state.index = 0
+  state.drift_notified = false
   state.root = opts.root or vim.fn.getcwd()
   -- Preferred code window; codewin.open re-resolves if it isn't usable.
   state.code_win = vim.api.nvim_get_current_win()
