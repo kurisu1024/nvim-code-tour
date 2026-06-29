@@ -216,6 +216,16 @@ function M.follow(action)
   end
 end
 
+-- Follow the markdown link under the narrator-float cursor. Drives the active
+-- renderer's hit-test (the float owns link geometry); a no-op when no tour is
+-- active or the renderer has no such affordance. Backs `<Plug>(codetour-follow)`.
+function M.follow_cursor()
+  local r = state.renderer
+  if r and type(r.follow_under_cursor) == "function" then
+    r:follow_under_cursor()
+  end
+end
+
 -- Render the current step end to end.
 local function render()
   maybe_notify_drift()
