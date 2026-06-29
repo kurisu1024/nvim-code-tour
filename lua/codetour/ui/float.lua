@@ -6,6 +6,7 @@
 -- mirror the tour navigation keys so the float is usable if focused.
 
 local config = require("codetour.config")
+local mdrender = require("codetour.ui.mdrender")
 
 local M = {}
 
@@ -79,6 +80,7 @@ function Float:present(view)
   self:_ensure_buf()
 
   self.links = view.links or {}
+  self._follow_dispatch = (view.actions or {}).follow
 
   local header = string.format("Step %s%s", view.counter, view.title and (" — " .. view.title) or "")
   local lines = { header, "" }
@@ -87,6 +89,10 @@ function Float:present(view)
   vim.bo[self.buf].modifiable = true
   vim.api.nvim_buf_set_lines(self.buf, 0, -1, false, lines)
   vim.bo[self.buf].modifiable = false
+
+  -- Hand the float to the configured markdown renderer. Treesitter is the floor
+  -- (filetype=markdown, already set); an installed prettifier decorates instead.
+  mdrender.apply(self.buf, mdrender.select(config.get().markdown_renderer))
 
   local g = geometry()
   local win_opts = {
@@ -109,6 +115,12 @@ function Float:present(view)
   end
 
   self:_set_maps(view)
+end
+
+-- Public follow entry point for `<Plug>(codetour-follow)`: resolve and dispatch
+-- the link under the float cursor using the dispatcher from the last present().
+function Float:follow_under_cursor()
+  self:_follow(self._follow_dispatch)
 end
 
 function Float:close()

@@ -6,6 +6,14 @@ local M = {}
 -- `end` maps to stop() (reads better as a user verb; avoids the Lua keyword).
 local SUBCOMMANDS = { "start", "next", "prev", "goto", "resume", "end", "list" }
 
+-- Tab-completion: subcommands whose name starts with the current arglead.
+-- Exposed so the surface is unit-testable without driving the command line.
+function M.complete(arglead)
+  return vim.tbl_filter(function(name)
+    return vim.startswith(name, arglead or "")
+  end, SUBCOMMANDS)
+end
+
 function M.dispatch(fargs)
   local ct = require("codetour")
   local sub = fargs[1] or "start"
@@ -36,9 +44,7 @@ function M.register()
     force = true, -- plugin/ bootstrap + setup() both register; don't E174 on the second
     desc = "Play CodeTour .tour files",
     complete = function(arglead)
-      return vim.tbl_filter(function(name)
-        return vim.startswith(name, arglead)
-      end, SUBCOMMANDS)
+      return M.complete(arglead)
     end,
   })
 end

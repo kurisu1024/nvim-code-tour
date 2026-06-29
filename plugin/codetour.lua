@@ -7,3 +7,5 @@ end
 vim.g.loaded_codetour = true
 
 require("codetour.command").register()
+-- <Plug> targets only — no global keys are bound (the tour keys are buffer-local).
+require("codetour.plug").register()
