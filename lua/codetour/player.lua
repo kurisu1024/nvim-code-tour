@@ -331,9 +331,16 @@ local function render()
     counter = string.format("%d/%d", state.index, #state.tour.steps),
     title = step.title,
     keymaps = config.get().keymaps,
-    -- Where the code landed, for anchored (mode B) placement. nil for steps with
-    -- no code location (content/directory/uri); fixed/split renderers ignore it.
-    anchor = (resolution.line and state.code_win) and { win = state.code_win, line = resolution.line } or nil,
+    -- Where the code landed, for anchored (mode B) placement and fixed-float
+    -- reveal. nil for steps with no code location (content/directory/uri).
+    anchor = (resolution.line and state.code_win)
+        and {
+          win = state.code_win,
+          line = resolution.line,
+          endline = (resolution.selection and resolution.selection["end"] and resolution.selection["end"].line)
+            or resolution.line,
+        }
+      or nil,
     actions = { next = M.next, prev = M.prev, stop = M.stop, follow = M.follow, focus_code = focus_code },
   })
 end

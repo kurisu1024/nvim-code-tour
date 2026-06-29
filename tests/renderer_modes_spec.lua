@@ -95,6 +95,30 @@ describe("renderer modes", function()
     assert.equals("float", config.get().renderer) -- not overwritten by junk
   end)
 
+  it("keeps a bottom-float's anchored line above the float (not under it)", function()
+    -- A tall fixture so there is room to scroll; anchor deep in the file.
+    local lines = {}
+    for i = 1, 200 do
+      lines[i] = "line " .. i
+    end
+    local tmp = vim.fn.tempname() .. ".txt"
+    vim.fn.writefile(lines, tmp)
+    local tour = model.normalize({
+      title = "Deep",
+      steps = { { description = "deep", file = tmp, line = 150 } },
+    })
+
+    config.setup({ float = { position = "bottom", height = 0.3 } })
+    player.start(tour, { root = "/", step = 1 })
+
+    local code_win = vim.api.nvim_get_current_win()
+    local win_h = vim.api.nvim_win_get_height(code_win)
+    local screenrow = vim.fn.winline() -- screen row of the anchored line (cursor)
+    -- The line should sit in the upper portion, clear of a ~bottom-30% float.
+    assert.equals(150, vim.api.nvim_win_get_cursor(code_win)[1])
+    assert.is_true(screenrow <= math.floor(win_h * 0.5))
+  end)
+
   it("focuses the narrator window and the same key is mapped to return", function()
     player.start(make_tour(), { root = fixtures, step = 1 })
     local fwin = float_win()

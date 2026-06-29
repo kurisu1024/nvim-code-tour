@@ -163,9 +163,11 @@ Three narrator presentations sit behind one seam; switch between them live mid-t
 `:CodeTour renderer {mode}` to compare:
 
 - **`float`** (A) — a fixed narrator float anchored to the top/bottom edge. Never disturbs
-  your window layout. The default.
-- **`float-anchored`** (B) — a float pinned just below the step's anchored code line, so the
-  prose sits next to the code it describes.
+  your window layout. The code window scrolls so the highlighted line stays in the clear
+  band (the float never covers the line it points at). The default.
+- **`float-anchored`** (B) — a float pinned next to the step's anchored line — below it when
+  there's room beneath, above it otherwise — so it sits beside the highlighted code without
+  covering it.
 - **`split`** (C) — the narrator in a horizontal split below the code window. Changes the
   layout, but some people prefer a stable, non-overlapping panel.
 

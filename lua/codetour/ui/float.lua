@@ -54,25 +54,78 @@ local function fixed_geometry()
   }
 end
 
--- Anchored placement: pinned to the code window just below the anchored line.
--- Falls back to fixed geometry when there is no usable anchor (content steps).
+-- The on-screen row of the anchored line, 1-based from the top of its window.
+-- codewin already parked the cursor on that line, so winline() reports it.
+local function anchor_screenrow(win)
+  return vim.api.nvim_win_call(win, function()
+    return vim.fn.winline()
+  end)
+end
+
+-- Anchored placement: pinned to the code window next to the anchored line, never
+-- on top of it. The float goes BELOW the line when the line sits in the upper
+-- half of the window (room beneath), else ABOVE it — so the highlighted code
+-- stays visible. Falls back to fixed geometry when there is no usable anchor.
 local function anchored_geometry(anchor)
   if not (anchor and anchor.win and vim.api.nvim_win_is_valid(anchor.win) and anchor.line) then
     return fixed_geometry()
   end
   local cfg = config.get().float
   local win_w = vim.api.nvim_win_get_width(anchor.win)
+  local win_h = vim.api.nvim_win_get_height(anchor.win)
   local width = math.max(20, math.floor(win_w * (cfg.width or 0.5)))
   local height = math.max(3, math.floor(vim.o.lines * (cfg.height or 0.3)))
+
+  local screenrow = anchor_screenrow(anchor.win)
+  local below = screenrow <= math.floor(win_h / 2)
+  if below then
+    -- Top-left of the float one row beneath the (selection's) last anchored line.
+    return {
+      relative = "win",
+      win = anchor.win,
+      bufpos = { (anchor.endline or anchor.line) - 1, 0 },
+      anchor = "NW",
+      row = 1,
+      col = 0,
+      width = width,
+      height = height,
+    }
+  end
+  -- Bottom-left of the float one row above the anchored line.
   return {
     relative = "win",
     win = anchor.win,
-    bufpos = { anchor.line - 1, 0 }, -- 0-indexed; float anchors off this cell
-    row = 1, -- one line below the anchored line
+    bufpos = { anchor.line - 1, 0 },
+    anchor = "SW",
+    row = -1,
     col = 0,
     width = width,
     height = height,
   }
+end
+
+-- Fixed-float reveal: scroll the anchor's window so the anchored line lands in
+-- the band the float does NOT cover (top quarter for a bottom float; lower
+-- portion for a top float). Keeps the highlighted code visible alongside the
+-- narrator. A no-op without a usable anchor (content/directory/uri steps).
+local function reveal_for_fixed(anchor)
+  if not (anchor and anchor.win and vim.api.nvim_win_is_valid(anchor.win) and anchor.line) then
+    return
+  end
+  local cfg = config.get().float
+  vim.api.nvim_win_call(anchor.win, function()
+    local win_h = vim.api.nvim_win_get_height(anchor.win)
+    local float_h = math.max(3, math.floor(vim.o.lines * (cfg.height or 0.3))) + 2 -- + border
+    local target -- desired screen row (1-based) for the anchored line
+    if cfg.position == "top" then
+      target = float_h + math.max(1, math.floor((win_h - float_h) * 0.25))
+    else
+      target = math.max(1, math.floor(win_h * 0.25))
+    end
+    local total = vim.api.nvim_buf_line_count(0)
+    local topline = math.max(1, math.min(anchor.line - target + 1, math.max(1, total)))
+    vim.fn.winrestview({ topline = topline, lnum = anchor.line, leftcol = 0 })
+  end)
 end
 
 -- The header (counter line + blank) sits above the markdown render lines, so a
@@ -174,6 +227,12 @@ function Float:present(view)
   else
     -- enter = false: focus stays in the code window.
     self.win = vim.api.nvim_open_win(self.buf, false, win_opts)
+  end
+
+  -- Keep the highlighted line out from under a fixed float by scrolling it into
+  -- the float's clear band. (Anchored placement already sits beside the line.)
+  if self.placement ~= "anchored" then
+    reveal_for_fixed(view.anchor)
   end
 
   self:_set_maps(view)

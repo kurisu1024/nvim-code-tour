@@ -140,8 +140,10 @@ setup() is optional; defaults shown: >lua
 Renderer modes (switch live with `:CodeTour renderer {mode}` to compare):
 
     float           (A) fixed narrator float at the top/bottom edge. Default.
-                        Never disturbs the window layout.
-    float-anchored  (B) float pinned just below the anchored code line.
+                        Scrolls the code so the highlighted line stays clear of
+                        the float. Never disturbs the window layout.
+    float-anchored  (B) float beside the anchored line (below when there is room
+                        beneath, else above) — never covering the highlight.
     split           (C) narrator in a horizontal split below the code window.
 
 ==============================================================================
