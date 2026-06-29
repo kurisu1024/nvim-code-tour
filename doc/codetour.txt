@@ -1,0 +1,207 @@
+*codetour.txt*    Play CodeTour .tour files natively in Neovim
+
+==============================================================================
+CONTENTS                                                    *codetour-contents*
+
+    1. Introduction ......................... |codetour-introduction|
+    2. Requirements ......................... |codetour-requirements|
+    3. Quick start .......................... |codetour-quickstart|
+    4. Commands ............................. |codetour-commands|
+    5. Keymaps .............................. |codetour-keymaps|
+    6. Configuration ........................ |codetour-configuration|
+    7. Lua API .............................. |codetour-api|
+    8. Health ............................... |codetour-health|
+    9. Discovery ............................ |codetour-discovery|
+   10. Step types & degradation ............. |codetour-steps|
+   11. Roadmap ............................. |codetour-roadmap|
+
+==============================================================================
+1. INTRODUCTION                                         *codetour-introduction*
+
+codetour plays CodeTour |.tour| files natively in Neovim. A .tour file is a
+guided, step-by-step walkthrough of a codebase: each step anchors to a file
+and line (or a pattern, a selection, or inline content) and shows a markdown
+explanation. A narrator float shows the step's prose while the code window
+jumps to the anchor and highlights it.
+
+This plugin is PLAYBACK ONLY. It reads and navigates existing tours; it does
+not record or author .tour files. The JSON format is the contract — we consume
+it. Authoring is a separate, deferred phase.
+
+Upstream format and reference:
+    https://github.com/microsoft/codetour
+    https://aka.ms/codetour-schema
+
+==============================================================================
+2. REQUIREMENTS                                         *codetour-requirements*
+
+- Neovim 0.10+ (hard floor; 0.10 APIs are used with no backward polyfill).
+
+- telescope.nvim — the only hard dependency, and only for the tour picker.
+  Without it the plugin still works: |:CodeTour| start plays the primary (or
+  first) tour, and |:CodeTour| list shows them all. Telescope pulls in
+  plenary.nvim transitively.
+
+- Optional: render-markdown.nvim or markview.nvim. If present, the narrator
+  float uses one to prettify markdown; otherwise it falls back to Treesitter.
+  Never a hard dependency.
+
+==============================================================================
+3. QUICK START                                           *codetour-quickstart*
+
+1. Open a project that contains tours (see |codetour-discovery|).
+2. Run >vim
+       :CodeTour start
+<  One tour plays immediately; several open the Telescope picker.
+3. The narrator float appears at the bottom; the code window jumps to step 1
+   and highlights the anchored line.
+4. Navigate with `]t` (next) and `[t` (prev). Press `q` to stop.
+
+Focus stays in the CODE WINDOW while a tour plays, so `]t` / `[t` / `q` work
+without touching the float. To follow a markdown link in the float, focus the
+float and press `<CR>` over the link, or map |<Plug>(codetour-follow)|.
+
+`setup()` is optional — |:CodeTour| is registered at startup and works before
+setup() is called. Call setup() only to override defaults.
+
+==============================================================================
+4. COMMANDS                                                 *codetour-commands*
+
+                                                                    *:CodeTour*
+A single command with tab-completion:
+
+    :CodeTour start     Discover tours and start one (picker if several).
+                        This is the default if no subcommand is given.
+    :CodeTour next      Next step (chains to nextTour at the end).
+    :CodeTour prev      Previous step.
+    :CodeTour goto {N}  Jump to step {N}.
+    :CodeTour resume    Re-open the tour where you left off (after `end`).
+    :CodeTour end       Stop the tour (keeps position for resume).
+    :CodeTour list      List discovered tours.
+
+==============================================================================
+5. KEYMAPS                                                   *codetour-keymaps*
+
+The plugin sets NO global keymaps. While a tour is playing, these buffer-local
+maps are active (on the code buffer and on the float):
+
+    ]t      Next step                    (config: keymaps.next)
+    [t      Previous step                (config: keymaps.prev)
+    q       Stop the tour                (config: keymaps.stop)
+    <CR>    Follow the link under cursor (config: keymaps.follow; float only)
+
+Set `default_keymaps = false` to suppress these and drive everything via
+|:CodeTour| or the |codetour-api|.
+
+                                                              *codetour-plug*
+<Plug> targets for your own global bindings (registered at startup; bound to
+no key by default): >lua
+    vim.keymap.set("n", "<leader>tn", "<Plug>(codetour-next)")
+    vim.keymap.set("n", "<leader>tp", "<Plug>(codetour-prev)")
+    vim.keymap.set("n", "<leader>tq", "<Plug>(codetour-stop)")
+    vim.keymap.set("n", "<leader>tr", "<Plug>(codetour-resume)")
+    vim.keymap.set("n", "<leader>tl", "<Plug>(codetour-list)")
+    vim.keymap.set("n", "<leader>tf", "<Plug>(codetour-follow)")
+<
+==============================================================================
+6. CONFIGURATION                                       *codetour-configuration*
+
+setup() is optional; defaults shown: >lua
+    require("codetour").setup({
+      tour_dir = nil,          -- extra dir beyond conventional locations
+      float = {
+        position = "bottom",   -- "bottom" | "top"
+        width = 0.5,           -- fraction of editor columns
+        height = 0.3,          -- fraction of editor rows
+      },
+      default_keymaps = true,  -- buffer-local tour maps while playing
+      keymaps = {
+        next = "]t",
+        prev = "[t",
+        follow = "<CR>",
+        stop = "q",
+      },
+      markdown_renderer = "auto", -- "auto"|"treesitter"|"render-markdown"|"markview"
+    })
+<
+==============================================================================
+7. LUA API                                                       *codetour-api*
+
+The Lua API is the real surface; |:CodeTour| just routes to it. >lua
+    local ct = require("codetour")
+
+    ct.setup(opts)        -- configure (optional)
+    ct.start(opts)        -- opts: { root?, step? } — discover and play
+    ct.next()
+    ct.prev()
+    ct["goto"](n)         -- `goto` is a Lua keyword; use the index form
+    ct.resume()
+    ct.stop()
+    ct.list()
+<
+==============================================================================
+8. HEALTH                                                     *codetour-health*
+
+                                                          *:checkhealth-codetour*
+>vim
+    :checkhealth codetour
+<
+Reports how many tours were discovered (flagging any with validation problems)
+and the status of the two optional integrations (Telescope and the markdown
+prettifier).
+
+==============================================================================
+9. DISCOVERY                                               *codetour-discovery*
+
+Discovery resolves the workspace root as git root (`vim.fs.root`) then cwd,
+and scans:
+
+    .tours/
+    .vscode/tours/
+    .github/tours/
+    root main.tour and *.tour
+    any extra `tour_dir` you configured
+
+A tour is PRIMARY if it sets isPrimary:true or its title starts with "1 -".
+Invalid tours are flagged (visible in |:CodeTour| list and |:checkhealth|) and
+skipped at play time rather than crashing discovery.
+
+==============================================================================
+10. STEP TYPES & DEGRADATION                                   *codetour-steps*
+
+Supported:
+    file + line          Jump and highlight the line.
+    file + pattern       Resolve the line by regex (JS->Vim, first match).
+    selection            Highlight the selected range.
+    content (no file)    Narrate the description only.
+    markdown links       Followed with <CR> in the float (step/tour/file).
+    nextTour chaining    `]t` past the last step chains onward.
+    git ref              Compares to HEAD; WARNS on drift. Never mutates tree.
+
+Degrades (with a notice, navigation keeps working):
+    directory / uri      Not yet; narrated as content (roadmap fast-follow).
+    unsupported view     Narrate the description.
+    command: links,      Rendered INERT (never executed).
+    shell >>, code inject
+
+A missing file, an unresolvable pattern, or a broken tour degrades, notifies,
+and continues.
+
+==============================================================================
+11. ROADMAP                                                  *codetour-roadmap*
+
+Deliberately deferred, roughly in order:
+
+    1. Fast-follows: directory & uri steps.
+    2. view-anchored steps.
+    3. Renderer modes B (line-anchored float) and C (split).
+    4. Cross-restart resume persistence.
+    5. Gated shell >> commands and code injection (explicit, confirmed).
+    6. Git ref: checkout offer and ref-blob playback.
+    7. when conditions (sandboxed, platform vars only).
+    8. Tier-3 full JS-regex fidelity.
+    9. Native markdown pretty-renderer.
+   10. Extension / event API.
+
+vim:tw=78:ts=8:ft=help:norl:
+</content>
