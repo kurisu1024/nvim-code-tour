@@ -4,9 +4,14 @@ local M = {}
 
 M.defaults = {
   tour_dir = nil, -- extra dir beyond the conventional locations
-  float = { position = "bottom", width = 0.5, height = 0.3 },
+  -- Active renderer: "float" (fixed narrator float, A), "float-anchored" (float
+  -- pinned near the anchored line, B), or "split" (narrator in a split, C).
+  -- Switchable live mid-tour via `:CodeTour renderer <mode>`.
+  renderer = "float",
+  float = { position = "bottom", width = 0.5, height = 0.3, hint = true },
   default_keymaps = true, -- buffer-local maps during a tour
-  keymaps = { next = "]t", prev = "[t", follow = "<CR>", stop = "q", help = "g?" },
+  -- `focus` toggles between the code window and the narrator; `help` is reserved.
+  keymaps = { next = "]t", prev = "[t", follow = "<CR>", stop = "q", focus = "]f", help = "g?" },
   markdown_renderer = "auto",
 }
 

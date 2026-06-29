@@ -57,8 +57,10 @@ end
 local function clear_maps()
   if state.map_buf and vim.api.nvim_buf_is_valid(state.map_buf) then
     local km = config.get().keymaps
-    for _, lhs in ipairs({ km.next, km.prev, km.stop }) do
-      pcall(vim.keymap.del, "n", lhs, { buffer = state.map_buf })
+    for _, lhs in ipairs({ km.next, km.prev, km.stop, km.focus }) do
+      if lhs then
+        pcall(vim.keymap.del, "n", lhs, { buffer = state.map_buf })
+      end
     end
   end
   state.map_buf = nil
@@ -74,6 +76,9 @@ local function set_maps(buf)
   vim.keymap.set("n", km.next, M.next, vim.tbl_extend("force", { buffer = buf }, opts))
   vim.keymap.set("n", km.prev, M.prev, vim.tbl_extend("force", { buffer = buf }, opts))
   vim.keymap.set("n", km.stop, M.stop, vim.tbl_extend("force", { buffer = buf }, opts))
+  if km.focus then
+    vim.keymap.set("n", km.focus, M.focus, vim.tbl_extend("force", { buffer = buf }, opts))
+  end
   state.map_buf = buf
 end
 
@@ -201,6 +206,42 @@ local function open_file(path)
   end
 end
 
+-- Directory step (fast-follow): open the directory listing in the code window.
+-- Root-relative per the spec; whatever directory handler is installed (netrw,
+-- neo-tree, oil…) takes it from there. Missing dirs degrade with a notice.
+local function open_directory(dir)
+  local abs = resolve_path(dir)
+  if vim.fn.isdirectory(abs) ~= 1 then
+    notify_step("directory " .. dir .. " not found")
+    return
+  end
+  local _, win = codewin.open(state.code_win, state.root, dir, nil, 0)
+  if win then
+    state.code_win = win
+  end
+end
+
+-- The opener for external uri steps; injectable so tests can capture without
+-- spawning a browser. Defaults to vim.ui.open (Neovim 0.10+).
+M._opener = function(target)
+  if vim.ui and type(vim.ui.open) == "function" then
+    pcall(vim.ui.open, target)
+  end
+end
+
+-- uri step (fast-follow): a file:// uri opens the file in the code window; any
+-- other scheme is handed to the external opener (browser, etc.) with a notice.
+-- Never executes shell — vim.ui.open is the OS "open" handler, not a command.
+local function open_uri(uri)
+  local file_path = uri:match("^file://(.*)$")
+  if file_path then
+    open_file(vim.uri_decode and vim.uri_decode(file_path) or file_path)
+    return
+  end
+  notify_step("opening external uri " .. uri)
+  M._opener(uri)
+end
+
 -- Dispatch a markdown link action selected via `<CR>` in the narrator float.
 -- Degrade-notify-continue: an unknown or malformed action is simply ignored.
 function M.follow(action)
@@ -226,6 +267,25 @@ function M.follow_cursor()
   end
 end
 
+-- Move focus into the narrator window. Bound to `keymaps.focus` on the code
+-- buffer; the renderer mirrors the same key to return focus here (a toggle).
+-- A no-op when the renderer has no focusable window (or none is open yet).
+function M.focus()
+  local r = state.renderer
+  if r and type(r.focus) == "function" then
+    r:focus()
+  end
+end
+
+-- Return focus to the code window. The renderer binds this to `keymaps.focus`
+-- on its own buffer so the same key toggles back. Falls back to the current
+-- window's nearest usable code window via codewin's own safety net.
+local function focus_code()
+  if state.code_win and vim.api.nvim_win_is_valid(state.code_win) then
+    pcall(vim.api.nvim_set_current_win, state.code_win)
+  end
+end
+
 -- Render the current step end to end.
 local function render()
   maybe_notify_drift()
@@ -233,13 +293,17 @@ local function render()
   local resolution = anchor.resolve(step, pattern_lines(step))
 
   if resolution.kind == "content" or not step.file then
-    -- Content / view-anchored / non-file step: no code anchor. Leave the code
-    -- window untouched, clear any prior highlight, and wire nav maps on the
-    -- current buffer so ]t/[t/q work without having to focus the float.
-    --
-    -- An unsupported `view` is not an anchor we can honor in the MVP, so it
-    -- degrades to narrating the description — but visibly, with a notice.
-    if step.view ~= nil and step.view ~= "" then
+    -- Non-file step: no code anchor in a normal buffer. directory/uri steps act
+    -- on the side (open the dir / hand the uri to the OS); content and unknown
+    -- view steps just narrate. Either way nav maps go on the current buffer so
+    -- ]t/[t/q work without having to focus the float.
+    if step.type == "directory" and step.directory then
+      open_directory(step.directory)
+    elseif step.type == "uri" and step.uri then
+      open_uri(step.uri)
+    elseif step.view ~= nil and step.view ~= "" then
+      -- An unsupported `view` is not an anchor we can honor; degrade to narrating
+      -- the description — but visibly, with a notice.
       notify_step("unsupported view '" .. tostring(step.view) .. "'; showing description")
     end
     clear_highlight()
@@ -267,7 +331,10 @@ local function render()
     counter = string.format("%d/%d", state.index, #state.tour.steps),
     title = step.title,
     keymaps = config.get().keymaps,
-    actions = { next = M.next, prev = M.prev, stop = M.stop, follow = M.follow },
+    -- Where the code landed, for anchored (mode B) placement. nil for steps with
+    -- no code location (content/directory/uri); fixed/split renderers ignore it.
+    anchor = (resolution.line and state.code_win) and { win = state.code_win, line = resolution.line } or nil,
+    actions = { next = M.next, prev = M.prev, stop = M.stop, follow = M.follow, focus_code = focus_code },
   })
 end
 
@@ -284,8 +351,27 @@ function M.start(tour, opts)
   state.root = opts.root or vim.fn.getcwd()
   -- Preferred code window; codewin.open re-resolves if it isn't usable.
   state.code_win = vim.api.nvim_get_current_win()
-  state.renderer = renderer.new()
+  state.renderer = renderer.new(config.get().renderer)
   M["goto"](opts.step or 1)
+end
+
+-- Swap the active renderer mid-tour and re-draw the current step, so the modes
+-- can be compared side by side without restarting. Persists the choice in config
+-- so subsequent tours use it too. Backs `:CodeTour renderer <mode>`.
+function M.set_renderer(mode)
+  if not renderer.is_mode(mode) then
+    vim.notify("codetour: unknown renderer '" .. tostring(mode) .. "'", vim.log.levels.WARN)
+    return
+  end
+  config.setup({ renderer = mode })
+  if not state.tour then
+    return -- no active tour; the next start() picks up the new mode
+  end
+  if state.renderer then
+    state.renderer:close()
+  end
+  state.renderer = renderer.new(mode)
+  render()
 end
 
 -- `goto` is a Lua reserved word; the index form is portable across runtimes.
@@ -299,7 +385,7 @@ M["goto"] = function(n)
   end
   state.index = math.max(1, math.min(n, total))
   if not state.renderer then
-    state.renderer = renderer.new()
+    state.renderer = renderer.new(config.get().renderer)
   end
   render()
 end
@@ -338,7 +424,7 @@ function M.resume()
   if not (state.code_win and vim.api.nvim_win_is_valid(state.code_win)) then
     state.code_win = vim.api.nvim_get_current_win()
   end
-  state.renderer = renderer.new()
+  state.renderer = renderer.new(config.get().renderer)
   M["goto"](state.index < 1 and 1 or state.index)
 end
 

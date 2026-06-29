@@ -134,5 +134,7 @@ M.prev = player.prev
 M["goto"] = player["goto"] -- `goto` is a reserved word; index form is portable
 M.resume = player.resume
 M.stop = player.stop
+M.focus = player.focus
+M.set_renderer = player.set_renderer
 
 return M

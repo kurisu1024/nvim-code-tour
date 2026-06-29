@@ -97,6 +97,8 @@ A single `:CodeTour <sub>` command with tab-completion:
 | `:CodeTour resume`| Re-open the tour where you left off (after `:CodeTour end`).      |
 | `:CodeTour end`   | Stop the tour (tears down the float; keeps position for resume).  |
 | `:CodeTour list`  | List discovered tours (title, step count, primary flag, path).   |
+| `:CodeTour focus` | Move focus into the narrator window.                              |
+| `:CodeTour renderer {mode}` | Switch the narrator renderer live: `float`, `float-anchored`, or `split`. |
 
 ## Keymaps
 
@@ -109,9 +111,13 @@ active (on the code buffer and on the float):
 | `[t`  | Previous step                           | `keymaps.prev`    |
 | `q`   | Stop the tour                           | `keymaps.stop`    |
 | `<CR>`| Follow the link under the cursor (float)| `keymaps.follow`  |
+| `]f`  | Toggle focus between code window and narrator | `keymaps.focus` |
 
-Set `default_keymaps = false` to suppress these and drive everything via `:CodeTour` or the
-Lua API.
+The narrator also shows a one-line **keybinding hint** (in the float's border footer, or the
+split's winbar) so you don't have to memorize these. Disable it with `float.hint = false`.
+
+Set `default_keymaps = false` to suppress the maps entirely and drive everything via
+`:CodeTour` or the Lua API.
 
 For your own **global** bindings, map the provided `<Plug>` targets:
 
@@ -122,6 +128,7 @@ vim.keymap.set("n", "<leader>tq", "<Plug>(codetour-stop)")
 vim.keymap.set("n", "<leader>tr", "<Plug>(codetour-resume)")
 vim.keymap.set("n", "<leader>tl", "<Plug>(codetour-list)")
 vim.keymap.set("n", "<leader>tf", "<Plug>(codetour-follow)") -- follow link in float
+vim.keymap.set("n", "<leader>tF", "<Plug>(codetour-focus)")  -- focus the narrator
 ```
 
 ## Configuration
@@ -131,10 +138,12 @@ vim.keymap.set("n", "<leader>tf", "<Plug>(codetour-follow)") -- follow link in f
 ```lua
 require("codetour").setup({
   tour_dir = nil,          -- extra directory to scan beyond the conventional locations
+  renderer = "float",      -- "float" (A) | "float-anchored" (B) | "split" (C)
   float = {
-    position = "bottom",   -- "bottom" | "top"
+    position = "bottom",   -- "bottom" | "top"  (fixed float only)
     width = 0.5,           -- fraction of editor columns
-    height = 0.3,          -- fraction of editor rows
+    height = 0.3,          -- fraction of editor rows (also the split height)
+    hint = true,           -- show the keybinding hint in the footer/winbar
   },
   default_keymaps = true,  -- buffer-local tour maps while playing
   keymaps = {
@@ -142,10 +151,23 @@ require("codetour").setup({
     prev = "[t",
     follow = "<CR>",
     stop = "q",
+    focus = "]f",
   },
   markdown_renderer = "auto", -- "auto" | "treesitter" | "render-markdown" | "markview"
 })
 ```
+
+### Renderer modes
+
+Three narrator presentations sit behind one seam; switch between them live mid-tour with
+`:CodeTour renderer {mode}` to compare:
+
+- **`float`** (A) — a fixed narrator float anchored to the top/bottom edge. Never disturbs
+  your window layout. The default.
+- **`float-anchored`** (B) — a float pinned just below the step's anchored code line, so the
+  prose sits next to the code it describes.
+- **`split`** (C) — the narrator in a horizontal split below the code window. Changes the
+  layout, but some people prefer a stable, non-overlapping panel.
 
 ## Lua API
 
@@ -162,6 +184,8 @@ ct["goto"](n)         -- `goto` is a Lua keyword; use the index form
 ct.resume()
 ct.stop()
 ct.list()
+ct.focus()             -- move focus into the narrator window
+ct.set_renderer(mode)  -- "float" | "float-anchored" | "split" (live switch)
 ```
 
 ## Health check
@@ -198,7 +222,8 @@ Invalid tours are not hidden — they are flagged (visible in `:CodeTour list` a
 | Markdown links (step / tour / file)  | Followed with `<CR>` in the float.                           |
 | `nextTour` chaining                  | `]t` past the last step chains to the named tour.            |
 | Git `ref`                            | Compares to HEAD; **warns** on drift. Never mutates the tree.|
-| `directory` / `uri` steps            | Not yet — narrated as content (roadmap fast-follow).         |
+| `directory` steps                    | Open the directory listing in the code window.               |
+| `uri` steps                          | `file://` opens the file; other schemes via `vim.ui.open`.   |
 | `view`-anchored steps                | Unsupported view → narrate the description, with a notice.   |
 | `command:` links, shell `>>`, code injection | Rendered **inert** (never executed).                |
 
@@ -207,18 +232,19 @@ Resilience is a design principle: a missing file, an unresolvable pattern, or a 
 
 ## Roadmap
 
-Deliberately deferred, roughly in order:
+Done since the MVP: fast-follow `directory` & `uri` steps; renderer modes B
+(line-anchored float) and C (split) behind the `Renderer` seam, switchable live.
 
-1. Fast-follows: `directory` & `uri` steps.
-2. `view`-anchored steps.
-3. Renderer modes B (line-anchored float) and C (split) behind the `Renderer` seam.
-4. Cross-restart resume persistence (state file under `stdpath('state')/codetour/`).
-5. Gated shell `>>` commands and code injection (explicit, confirmed).
-6. Git `ref`: checkout offer and ref-blob playback without checkout.
-7. `when` conditions — sandboxed evaluator, platform vars only, never arbitrary JS.
-8. Tier-3 full JS-regex fidelity (only if a real tour needs it).
-9. Native markdown pretty-renderer.
-10. Extension / event API.
+Still deferred, roughly in order:
+
+1. `view`-anchored steps.
+2. Cross-restart resume persistence (state file under `stdpath('state')/codetour/`).
+3. Gated shell `>>` commands and code injection (explicit, confirmed).
+4. Git `ref`: checkout offer and ref-blob playback without checkout.
+5. `when` conditions — sandboxed evaluator, platform vars only, never arbitrary JS.
+6. Tier-3 full JS-regex fidelity (only if a real tour needs it).
+7. Native markdown pretty-renderer.
+8. Extension / event API.
 
 ## Development
 

@@ -22,6 +22,9 @@ M.mappings = {
   ["<Plug>(codetour-resume)"] = function()
     require("codetour").resume()
   end,
+  ["<Plug>(codetour-focus)"] = function()
+    require("codetour").focus()
+  end,
   ["<Plug>(codetour-list)"] = function()
     require("codetour").list()
   end,

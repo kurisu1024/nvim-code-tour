@@ -78,6 +78,10 @@ A single command with tab-completion:
     :CodeTour resume    Re-open the tour where you left off (after `end`).
     :CodeTour end       Stop the tour (keeps position for resume).
     :CodeTour list      List discovered tours.
+    :CodeTour focus     Move focus into the narrator window.
+    :CodeTour renderer {mode}
+                        Switch the narrator renderer live. {mode} is one of
+                        float | float-anchored | split (see |codetour-renderers|).
 
 ==============================================================================
 5. KEYMAPS                                                   *codetour-keymaps*
@@ -89,6 +93,10 @@ maps are active (on the code buffer and on the float):
     [t      Previous step                (config: keymaps.prev)
     q       Stop the tour                (config: keymaps.stop)
     <CR>    Follow the link under cursor (config: keymaps.follow; float only)
+    ]f      Toggle focus code<->narrator (config: keymaps.focus)
+
+The narrator shows a one-line keybinding hint (float border footer / split
+winbar); disable with `float.hint = false`.
 
 Set `default_keymaps = false` to suppress these and drive everything via
 |:CodeTour| or the |codetour-api|.
@@ -102,6 +110,7 @@ no key by default): >lua
     vim.keymap.set("n", "<leader>tr", "<Plug>(codetour-resume)")
     vim.keymap.set("n", "<leader>tl", "<Plug>(codetour-list)")
     vim.keymap.set("n", "<leader>tf", "<Plug>(codetour-follow)")
+    vim.keymap.set("n", "<leader>tF", "<Plug>(codetour-focus)")
 <
 ==============================================================================
 6. CONFIGURATION                                       *codetour-configuration*
@@ -109,10 +118,12 @@ no key by default): >lua
 setup() is optional; defaults shown: >lua
     require("codetour").setup({
       tour_dir = nil,          -- extra dir beyond conventional locations
+      renderer = "float",      -- "float" | "float-anchored" | "split"
       float = {
-        position = "bottom",   -- "bottom" | "top"
+        position = "bottom",   -- "bottom" | "top"  (fixed float only)
         width = 0.5,           -- fraction of editor columns
-        height = 0.3,          -- fraction of editor rows
+        height = 0.3,          -- fraction of editor rows (also split height)
+        hint = true,           -- keybinding hint in footer/winbar
       },
       default_keymaps = true,  -- buffer-local tour maps while playing
       keymaps = {
@@ -120,10 +131,19 @@ setup() is optional; defaults shown: >lua
         prev = "[t",
         follow = "<CR>",
         stop = "q",
+        focus = "]f",
       },
       markdown_renderer = "auto", -- "auto"|"treesitter"|"render-markdown"|"markview"
     })
 <
+                                                          *codetour-renderers*
+Renderer modes (switch live with `:CodeTour renderer {mode}` to compare):
+
+    float           (A) fixed narrator float at the top/bottom edge. Default.
+                        Never disturbs the window layout.
+    float-anchored  (B) float pinned just below the anchored code line.
+    split           (C) narrator in a horizontal split below the code window.
+
 ==============================================================================
 7. LUA API                                                       *codetour-api*
 
@@ -138,6 +158,8 @@ The Lua API is the real surface; |:CodeTour| just routes to it. >lua
     ct.resume()
     ct.stop()
     ct.list()
+    ct.focus()            -- move focus into the narrator window
+    ct.set_renderer(mode) -- "float"|"float-anchored"|"split" (live switch)
 <
 ==============================================================================
 8. HEALTH                                                     *codetour-health*
@@ -174,12 +196,13 @@ Supported:
     file + pattern       Resolve the line by regex (JS->Vim, first match).
     selection            Highlight the selected range.
     content (no file)    Narrate the description only.
+    directory            Open the directory listing in the code window.
+    uri                  file:// opens the file; other schemes via vim.ui.open.
     markdown links       Followed with <CR> in the float (step/tour/file).
     nextTour chaining    `]t` past the last step chains onward.
     git ref              Compares to HEAD; WARNS on drift. Never mutates tree.
 
 Degrades (with a notice, navigation keeps working):
-    directory / uri      Not yet; narrated as content (roadmap fast-follow).
     unsupported view     Narrate the description.
     command: links,      Rendered INERT (never executed).
     shell >>, code inject
@@ -190,18 +213,19 @@ and continues.
 ==============================================================================
 11. ROADMAP                                                  *codetour-roadmap*
 
-Deliberately deferred, roughly in order:
+Done since the MVP: fast-follow directory & uri steps; renderer modes B
+(anchored float) and C (split), switchable live.
 
-    1. Fast-follows: directory & uri steps.
-    2. view-anchored steps.
-    3. Renderer modes B (line-anchored float) and C (split).
-    4. Cross-restart resume persistence.
-    5. Gated shell >> commands and code injection (explicit, confirmed).
-    6. Git ref: checkout offer and ref-blob playback.
-    7. when conditions (sandboxed, platform vars only).
-    8. Tier-3 full JS-regex fidelity.
-    9. Native markdown pretty-renderer.
-   10. Extension / event API.
+Still deferred, roughly in order:
+
+    1. view-anchored steps.
+    2. Cross-restart resume persistence.
+    3. Gated shell >> commands and code injection (explicit, confirmed).
+    4. Git ref: checkout offer and ref-blob playback.
+    5. when conditions (sandboxed, platform vars only).
+    6. Tier-3 full JS-regex fidelity.
+    7. Native markdown pretty-renderer.
+    8. Extension / event API.
 
 vim:tw=78:ts=8:ft=help:norl:
 </content>
