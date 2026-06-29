@@ -1,0 +1,96 @@
+{
+  "$schema": "https://aka.ms/codetour-schema",
+  "title": "1 - Playback Happy Path",
+  "description": "Follow a single `:CodeTour` press from the command line through discovery, the picker, normalization, and the player's render spine to the narrator float. This is the plugin touring itself — the layered core (pure) → player (conductor) → UI adapters (swappable) architecture, walked end to end.",
+  "ref": "main",
+  "isPrimary": true,
+  "steps": [
+    {
+      "directory": "lua/codetour",
+      "title": "The shape of the plugin",
+      "description": "**Situation:** everything runtime lives here. **Mechanism:** three rings — `core/` is the headless, pure engine (JSON, schema, model, discovery, anchor, git) that never opens a window; `player.lua` is the conductor that owns one active tour; `ui/` holds swappable adapters behind the `Renderer` seam. **Implication:** you can test the whole tour-resolution path with no Neovim UI at all. **Gotcha:** the core never `require`s Telescope or `ui/` — dependencies only point inward."
+    },
+    {
+      "file": "lua/codetour/command.lua",
+      "line": 28,
+      "title": "`:CodeTour` enters here",
+      "description": "**Situation:** the user runs `:CodeTour` (registered at startup by `plugin/codetour.lua` so it works before `setup()`). **Mechanism:** `dispatch` reads the first arg, defaulting to `start`, and routes to the Lua API in `codetour/init`. **Implication:** the command layer is a thin router — all real behavior is in the API, which keeps it unit-testable without driving the command line. **Gotcha:** `end` maps to `stop()` because `end` is a Lua keyword and reads better as a user verb."
+    },
+    {
+      "file": "lua/codetour/init.lua",
+      "line": 82,
+      "title": "start() — the discovery → play seam",
+      "description": "**Situation:** the public entry point for playback. **Mechanism:** resolve the workspace root, ask discovery for every tour under it, then branch — zero tours notifies, exactly one plays directly, several open the picker. **Implication:** this is the *only* place that bridges \"find tours on disk\" and \"play one,\" so the engine below stays ignorant of how a tour was chosen. **Gotcha:** the happy path we're tracing assumes more than one tour, so we fall through to the picker branch below."
+    },
+    {
+      "file": "lua/codetour/core/discovery.lua",
+      "line": 84,
+      "title": "Finding tours on disk",
+      "description": "**Situation:** `find(root, opts)` returns lightweight metadata, not loaded tours. **Mechanism:** it globs every conventional CodeTour location — `.tours/`, `.vscode/tours/`, `.github/tours/` (recursive), root-level `*.tour`/`.tour`, and a configurable extra dir — dedups, sorts, and reads just enough of each file to get title/step-count/primary-flag. **Implication:** listing a board of tours is cheap; full normalization is deferred until one is actually played. **Gotcha:** an unreadable or non-JSON file is skipped silently, but a parseable-but-invalid tour surfaces flagged `broken` so the picker can still show it."
+    },
+    {
+      "file": "lua/codetour/ui/picker.lua",
+      "line": 77,
+      "title": "The one Telescope touchpoint",
+      "description": "**Situation:** several tours were found, so `init` calls `pick`. **Mechanism:** Telescope is required *lazily and guarded* here — this is the single module in the codebase that knows Telescope exists. On confirm, the chosen meta is handed back through the injected `on_select` callback. **Implication:** Telescope is a soft dependency; everything except `pick()` is pure and works without it (and `init` degrades to playing the primary tour when it's absent). **Gotcha:** selecting a `broken` tour notifies instead of starting — see `M.select` just above."
+    },
+    {
+      "file": "lua/codetour/init.lua",
+      "line": 59,
+      "title": "Loading the chosen tour, resiliently",
+      "description": "**Situation:** the picker handed back a meta; now we materialize the real tour. **Mechanism:** `play_meta` reads the file, decodes JSON, and normalizes it — and a file that vanished or fails to normalize between discovery and now is skipped with a notice, never a crash. **Implication:** \"degrade, notify, continue\" is the engine's posture everywhere; a bad tour can't take down playback. **Gotcha:** discovery already validated the *metadata*, but the file can change underneath us, so this re-reads and re-validates from scratch."
+    },
+    {
+      "file": "lua/codetour/core/model.lua",
+      "line": 60,
+      "title": "Raw JSON → a typed Tour",
+      "description": "**Situation:** `normalize(raw)` is the boundary where untrusted JSON becomes a stable internal shape. **Mechanism:** the schema validates first (bailing with errors if the tour is structurally invalid), then each valid step is typed by anchor precedence — `directory` > `file` > `uri` > `content` — and `vim.NIL` (JSON null) is stripped to real `nil`. **Implication:** every layer above this only ever sees clean, typed values, so the player and anchor code carry no JSON-quirk defensiveness. **Gotcha:** that `denil` step matters — `vim.NIL` is truthy userdata and would slip through plain `nil` guards and crash downstream."
+    },
+    {
+      "file": "lua/codetour/player.lua",
+      "line": 349,
+      "title": "Handing the tour to the conductor",
+      "description": "**Situation:** `player.start(tour, opts)` takes ownership of playback. **Mechanism:** it tears down any prior UI, resets state (tour, index 0, root, drift flag), captures the preferred code window, builds the configured renderer, and jumps to the first step via `goto`. **Implication:** there is exactly one active tour at a time, and all playback state lives in this one `state` table — the single source of truth the navigation API reads and writes. **Gotcha:** `state.index` starts at 0; `goto(1)` is what actually triggers the first render below."
+    },
+    {
+      "file": "lua/codetour/player.lua",
+      "line": 290,
+      "title": "render() — the navigation spine",
+      "description": "**Situation:** every move (start, next, prev, goto) ends here. **Mechanism:** the fixed pipeline runs — check git-ref drift once, resolve the step's anchor, open + highlight the code, parse the markdown, then present it through the renderer. **Implication:** this single function is *the* contract for what \"showing a step\" means; the navigation commands are just thin wrappers that change `state.index` and call back into here. **Gotcha:** non-file steps (content/directory/uri) branch away from the code-window path but still wire nav keys onto the current buffer so `]t`/`[t`/`q` work everywhere."
+    },
+    {
+      "file": "lua/codetour/core/anchor.lua",
+      "line": 60,
+      "title": "Pure anchor resolution",
+      "description": "**Situation:** `resolve(step)` answers \"where should the code window land?\" without touching a window. **Mechanism:** precedence is fixed — a `selection` range beats a bare `line`, a `line` beats a `pattern`, a `file` with neither anchors at the top, everything else is `content`. Pattern steps scan the file's lines via the JS→Vim regex translator and degrade to `unresolved` rather than crashing. **Implication:** this is the headless seam between the typed model and the UI, so resolution logic is testable in isolation. **Gotcha:** `resolve` returns a *plan* (kind + line/selection), not an action — the player decides what to do with it."
+    },
+    {
+      "file": "lua/codetour/player.lua",
+      "line": 106,
+      "title": "Opening and highlighting the code",
+      "description": "**Situation:** the step resolved to a real line/selection, so `render_code` lands the code window. **Mechanism:** `codewin.open` picks a safe, usable window and loads the file; then the previous highlight is cleared and the new line (or selection range) is highlighted via the `codetour` extmark namespace. **Implication:** highlight state is tracked on `state.hl_buf` so the next step can always clear exactly what the last step drew, wherever it landed. **Gotcha:** if no safe window exists, it narrates only — but still binds the nav keys to whatever buffer the user is looking at, so the tour never gets stuck."
+    },
+    {
+      "file": "lua/codetour/player.lua",
+      "line": 328,
+      "title": "Handing the view to the renderer",
+      "description": "**Situation:** code is placed; now the narrative has to appear. **Mechanism:** the parsed markdown, step counter, title, keymaps, anchor location, and player callbacks are packed into one `view` table and passed to `renderer:present`. The active renderer (fixed float, anchored float, or split — chosen by `config.renderer`, swappable mid-tour) decides geometry. **Implication:** the player never knows *how* the narration is shown; it only describes *what*. That's the `Renderer` seam that lets modes A/B/C coexist. **Gotcha:** `anchor` is only populated when the step has a real code line — content/directory/uri steps pass `nil` so the float doesn't try to pin to nothing."
+    },
+    {
+      "file": "lua/codetour/ui/float.lua",
+      "line": 192,
+      "title": "The narrator float",
+      "description": "**Situation:** the default renderer draws the step. **Mechanism:** `Float:present` ensures a scratch buffer, computes fixed or anchor-relative geometry, renders the markdown with a keybinding hint footer, and wires the player's `next`/`prev`/`stop`/`focus`/`follow` callbacks to buffer-local maps. **Implication:** the whole interactive surface — moving through steps, following links, toggling focus — lives on this one buffer's maps, mirrored from the code window. **Gotcha:** the float deliberately keeps itself off the highlighted line (the fixed-float reveal logic) so the narration never covers the code it's describing."
+    },
+    {
+      "file": "lua/codetour/player.lua",
+      "line": 400,
+      "title": "Moving onward (and chaining tours)",
+      "description": "**Situation:** the reader presses the next key. **Mechanism:** `next` bumps `state.index` and re-enters `render` — and at the last step, if the tour names a `nextTour`, it resolves that successor by title through the same path a tour-link uses and chains straight into it. **Implication:** the entire navigation surface (`next`/`prev`/`goto`/`resume`/`stop`) is just index arithmetic over the render spine you've now seen end to end. **Gotcha:** `goto` clamps to `[1, #steps]`, so over-stepping the ends is a no-op rather than an error — chaining only fires *exactly* at the final step."
+    },
+    {
+      "title": "You've walked the whole path",
+      "description": "From `:CodeTour` → `command.dispatch` → `init.start` → `discovery.find` → `picker.pick` → `play_meta`/`model.normalize` → `player.start` → the `render` spine (`anchor.resolve` → `codewin`/`highlight` → `renderer.present` → the float) → `next`.\n\nYou can now trace any change with the anchors in place: a parsing question lives in `core/`, a navigation question in `player.lua`, and a \"how it looks\" question in `ui/`. Recording (authoring tours) is the separable next phase — the playback core you just toured is the foundation it will build on."
+    }
+  ]
+}
