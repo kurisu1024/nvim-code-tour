@@ -1,6 +1,17 @@
-# nvim-code-tour
+```text
+ ██████╗ ██████╗ ██████╗ ███████╗████████╗ ██████╗ ██╗   ██╗██████╗ 
+██╔════╝██╔═══██╗██╔══██╗██╔════╝╚══██╔══╝██╔═══██╗██║   ██║██╔══██╗
+██║     ██║   ██║██║  ██║█████╗     ██║   ██║   ██║██║   ██║██████╔╝
+██║     ██║   ██║██║  ██║██╔══╝     ██║   ██║   ██║██║   ██║██╔══██╗
+╚██████╗╚██████╔╝██████╔╝███████╗   ██║   ╚██████╔╝╚██████╔╝██║  ██║
+ ╚═════╝ ╚═════╝ ╚═════╝ ╚══════╝   ╚═╝    ╚═════╝  ╚═════╝ ╚═╝  ╚═╝
+```
+
+> **nvim-code-tour** — guided `.tour` walkthroughs, natively in Neovim.
 
 Play [CodeTour](https://github.com/microsoft/codetour) `.tour` files natively in Neovim.
+
+![A CodeTour step playing: the narrator float sits clear of a multi-line selection highlighted in the code window](doc/assets/mode-float-selection.png)
 
 A `.tour` file is a guided, step-by-step walkthrough of a codebase: each step anchors to a
 file and line (or a pattern, a selection, or inline content) and shows a markdown
@@ -37,7 +48,7 @@ With [lazy.nvim](https://github.com/folke/lazy.nvim):
 
 ```lua
 {
-  "your/nvim-code-tour", -- or a local dir: dir = "~/path/to/nvim-code-tour"
+  "kurisu1024/nvim-code-tour", -- or a local dir: dir = "~/path/to/nvim-code-tour"
   dependencies = { "nvim-telescope/telescope.nvim" },
   config = function()
     require("codetour").setup()
@@ -49,7 +60,7 @@ With [packer.nvim](https://github.com/wbthomason/packer.nvim):
 
 ```lua
 use({
-  "your/nvim-code-tour",
+  "kurisu1024/nvim-code-tour",
   requires = { "nvim-telescope/telescope.nvim" },
   config = function()
     require("codetour").setup()
@@ -60,7 +71,7 @@ use({
 As a native package (no plugin manager):
 
 ```sh
-git clone <repo> \
+git clone https://github.com/kurisu1024/nvim-code-tour \
   ~/.local/share/nvim/site/pack/codetour/start/nvim-code-tour
 ```
 
@@ -165,11 +176,19 @@ Three narrator presentations sit behind one seam; switch between them live mid-t
 - **`float`** (A) — a fixed narrator float anchored to the top/bottom edge. Never disturbs
   your window layout. The code window scrolls so the highlighted line stays in the clear
   band (the float never covers the line it points at). The default.
+
+  ![float renderer: a fixed narrator float in the bottom-right corner over the code](doc/assets/mode-float.png)
+
 - **`float-anchored`** (B) — a float pinned next to the step's anchored line — below it when
   there's room beneath, above it otherwise — so it sits beside the highlighted code without
   covering it.
+
+  ![float-anchored renderer: the narrator float pinned just beneath the highlighted line](doc/assets/mode-float-anchored.png)
+
 - **`split`** (C) — the narrator in a horizontal split below the code window. Changes the
   layout, but some people prefer a stable, non-overlapping panel.
+
+  ![split renderer: the narrator in a full-width horizontal split below the code](doc/assets/mode-split.png)
 
 ## Lua API
 
