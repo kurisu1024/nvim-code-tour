@@ -13,7 +13,7 @@ local Float = {}
 Float.__index = Float
 
 function M.new()
-  return setmetatable({ win = nil, buf = nil }, Float)
+  return setmetatable({ win = nil, buf = nil, links = {} }, Float)
 end
 
 function Float:_ensure_buf()
@@ -35,6 +35,28 @@ local function geometry()
   return { width = width, height = height, row = row, col = col }
 end
 
+-- The header (counter line + blank) sits above the markdown render lines, so a
+-- buffer row maps to a markdown line by subtracting these two.
+local HEADER_ROWS = 2
+
+-- Resolve the link under the float cursor (if any) and hand its action to the
+-- player-supplied dispatcher. Pure hit-test against the parsed link map; never
+-- executes anything itself.
+function Float:_follow(dispatch)
+  if not dispatch or not (self.win and vim.api.nvim_win_is_valid(self.win)) then
+    return
+  end
+  local pos = vim.api.nvim_win_get_cursor(self.win)
+  local md_line = pos[1] - HEADER_ROWS
+  local col = pos[2] + 1 -- cursor col is 0-based; link spans are 1-based bytes
+  for _, link in ipairs(self.links or {}) do
+    if link.line == md_line and col >= link.from and col <= link.to then
+      dispatch(link.action)
+      return
+    end
+  end
+end
+
 function Float:_set_maps(view)
   local km = view.keymaps or {}
   local actions = view.actions or {}
@@ -46,11 +68,17 @@ function Float:_set_maps(view)
   map(km.next, actions.next)
   map(km.prev, actions.prev)
   map(km.stop, actions.stop)
-  map(km.follow, actions.follow)
+  if km.follow and actions.follow then
+    vim.keymap.set("n", km.follow, function()
+      self:_follow(actions.follow)
+    end, { buffer = self.buf, nowait = true, silent = true })
+  end
 end
 
 function Float:present(view)
   self:_ensure_buf()
+
+  self.links = view.links or {}
 
   local header = string.format("Step %s%s", view.counter, view.title and (" — " .. view.title) or "")
   local lines = { header, "" }

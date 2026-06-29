@@ -6,7 +6,7 @@
 --
 -- normalize(raw) -> Tour | (nil, errors[])
 --
--- Tour  = { title, description?, ref?, steps = Step[], skipped[] }
+-- Tour  = { title, description?, ref?, nextTour?, steps = Step[], skipped[] }
 -- Step  = { type, description, title?, file?, line?, pattern?, directory?,
 --           uri?, selection? }
 
@@ -69,6 +69,7 @@ function M.normalize(raw)
     title = raw.title,
     description = denil(raw.description),
     ref = denil(raw.ref),
+    nextTour = denil(raw.nextTour),
     steps = steps,
     skipped = result.skipped,
   }

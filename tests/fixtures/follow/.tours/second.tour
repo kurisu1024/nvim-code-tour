@@ -1,0 +1,18 @@
+{
+  "title": "Second Tour",
+  "description": "The tour that link/chain resolution targets by title.",
+  "steps": [
+    {
+      "title": "beta one",
+      "file": "src/beta.lua",
+      "line": 1,
+      "description": "Second tour, first step."
+    },
+    {
+      "title": "beta go",
+      "file": "src/beta.lua",
+      "line": 3,
+      "description": "Second tour, second step."
+    }
+  ]
+}
