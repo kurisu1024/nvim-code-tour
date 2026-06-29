@@ -2,7 +2,7 @@
 id: NCT-006
 type: story
 epic: NCT
-status: backlog
+status: done
 priority: medium
 size: M
 labels: [ready-for-agent]
