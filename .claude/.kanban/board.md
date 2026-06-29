@@ -8,7 +8,6 @@ _Legend: ◆ high · ▣ medium · ○ low_
 
 | ID | Title | Pri | Size | Blocked by |
 |----|-------|-----|------|-----------|
-| NCT-001 | Walking skeleton — file+line playback | ◆ | M | — |
 | NCT-002 | Full tour discovery engine | ◆ | M | NCT-001 |
 | NCT-003 | Telescope tour picker | ▣ | S | NCT-002 |
 | NCT-004 | Pattern anchoring + Tier-2 JS→Vim regex | ◆ | L | NCT-001 |
@@ -28,7 +27,11 @@ _(empty)_
 
 ## review
 
-_(empty)_
+### EPIC-001 · nvim-code-tour ◆
+
+| ID | Title | Pri | Size | Blocked by |
+|----|-------|-----|------|-----------|
+| NCT-001 | Walking skeleton — file+line playback | ◆ | M | — |
 
 ## done
 

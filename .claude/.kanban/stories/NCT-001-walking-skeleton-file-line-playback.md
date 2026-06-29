@@ -2,7 +2,7 @@
 id: NCT-001
 type: story
 epic: NCT
-status: backlog
+status: review
 priority: high
 size: M
 labels: [ready-for-agent]
@@ -29,12 +29,20 @@ This establishes skeletal versions of: discovery, json, schema, model, player, r
 (`Renderer` interface + fixed-float impl), codewin, highlight. Later stories deepen each.
 
 ## Acceptance criteria
-- [ ] `setup()` + `:CodeTour start` plays a valid file+line tour end to end.
-- [ ] Code window opens the right file with the cursor on the anchored line, line highlighted.
-- [ ] Narrator float shows the step's markdown (treesitter highlight) + `Step n/m`, in a fixed position.
-- [ ] `]t`/`[t` navigate; float and code window update in place without reflowing layout.
-- [ ] `q` ends the tour and removes float, extmarks, and buffer-local maps completely.
-- [ ] Core modules (model/schema) tested as pure functions; player/float tested in headless nvim.
+- [x] `setup()` + `:CodeTour start` plays a valid file+line tour end to end.
+- [x] Code window opens the right file with the cursor on the anchored line, line highlighted.
+- [x] Narrator float shows the step's markdown (treesitter highlight) + `Step n/m`, in a fixed position.
+- [x] `]t`/`[t` navigate; float and code window update in place without reflowing layout.
+- [x] `q` ends the tour and removes float, extmarks, and buffer-local maps completely.
+- [x] Core modules (model/schema) tested as pure functions; player/float tested in headless nvim.
+
+## Implementation notes
+Landed as the first slice. Modules: `core/{json,schema,model,discovery,markdown}`,
+`player`, `ui/{renderer,float,codewin,highlight}`, `config`, `command`, `init`,
+`plugin/codetour.lua`. 26 plenary specs (core pure + player/command headless), all green
+via `make test`. Discovery is the thin version (NCT-002 deepens it); markdown link-follow,
+pattern anchoring, selection/content steps, git ref, and the Telescope picker are their own
+later slices. The bad-file-skip in `init.start` already seeds NCT-008's resilience posture.
 
 ## Blocked by
 None — can start immediately.

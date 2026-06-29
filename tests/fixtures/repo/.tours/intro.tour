@@ -1,0 +1,18 @@
+{
+  "title": "Intro Tour",
+  "description": "A tiny walkthrough used by the test suite.",
+  "steps": [
+    {
+      "title": "The greeting",
+      "file": "src/example.lua",
+      "line": 2,
+      "description": "This is **step one**. It points at the greeting function."
+    },
+    {
+      "title": "The export",
+      "file": "src/example.lua",
+      "line": 6,
+      "description": "And this is step two — where the module is returned."
+    }
+  ]
+}
