@@ -1,0 +1,6 @@
+{
+  "title": "Good Tour",
+  "steps": [
+    { "file": "src/example.lua", "line": 2, "description": "a valid step" }
+  ]
+}
