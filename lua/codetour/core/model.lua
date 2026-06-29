@@ -51,6 +51,9 @@ local function normalize_step(raw)
     directory = directory,
     uri = uri,
     selection = denil(raw.selection),
+    -- Carried through for graceful degradation (NCT-008): no `view` is supported
+    -- in the MVP, so a view-anchored step degrades to narrating its description.
+    view = denil(raw.view),
   }
 end
 

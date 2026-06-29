@@ -26,11 +26,22 @@ local function trim(s)
   return (s:gsub("^%s+", ""):gsub("%s+$", ""))
 end
 
+-- A `command:` target acts on the machine; render it inert (no link).
+local function is_inert_target(path)
+  return path:lower():match("^%s*command:") ~= nil
+end
+
 -- Classify the inner text of a `[...]` token (not a file link) into an action,
 -- or nil when it isn't a recognizable ref.
 local function classify_ref(inner)
   local text = trim(inner)
   if text == "" then
+    return nil
+  end
+
+  -- A `command:` target acts on the machine; render it inert (no action) in the
+  -- bare-bracket form too, never as a tour link.
+  if is_inert_target(text) then
     return nil
   end
 
@@ -48,11 +59,6 @@ local function classify_ref(inner)
 
   -- Bare tour ref: `[Title]`.
   return { kind = "tour", title = text }
-end
-
--- A `command:` target acts on the machine; render it inert (no link).
-local function is_inert_target(path)
-  return path:lower():match("^%s*command:") ~= nil
 end
 
 -- Extract every link on one render line, in source order, appending to `links`.

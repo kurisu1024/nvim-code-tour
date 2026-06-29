@@ -121,17 +121,35 @@ local function render_code(step, resolution)
   end
 end
 
+-- Resolve a workspace-relative step.file to an absolute path (the CodeTour spec
+-- makes file paths relative to the root). Shared by pattern reading and the
+-- missing-file guard so both agree on what "the file" means.
+local function resolve_path(file)
+  local path = file
+  if state.root and not vim.startswith(path, "/") then
+    path = state.root .. "/" .. path
+  end
+  return vim.fn.fnamemodify(path, ":p")
+end
+
+-- Does a file-anchored step point at something that actually exists on disk?
+local function file_exists(file)
+  return vim.fn.filereadable(resolve_path(file)) == 1
+end
+
+-- A single, consistently-formatted degradation notice that always names the
+-- offending step number (the "notify" leg of "degrade, notify, continue").
+local function notify_step(msg)
+  vim.notify(string.format("codetour: step %d: %s", state.index, msg), vim.log.levels.WARN)
+end
+
 -- Pattern steps need the file's lines to scan; read them lazily (only when a
 -- pattern actually has to be resolved) so line/selection steps stay I/O-free.
 local function pattern_lines(step)
   if step.type ~= "file" or not step.file or step.pattern == nil or step.line ~= nil then
     return nil
   end
-  local path = step.file
-  if state.root and not vim.startswith(path, "/") then
-    path = state.root .. "/" .. path
-  end
-  local ok, lines = pcall(vim.fn.readfile, vim.fn.fnamemodify(path, ":p"))
+  local ok, lines = pcall(vim.fn.readfile, resolve_path(step.file))
   return ok and lines or nil
 end
 
@@ -205,12 +223,30 @@ local function render()
   local resolution = anchor.resolve(step, pattern_lines(step))
 
   if resolution.kind == "content" or not step.file then
-    -- Content step: no code anchor. Leave the code window untouched, clear any
-    -- prior highlight, and wire nav maps on the current buffer so ]t/[t/q work
-    -- without having to focus the float.
+    -- Content / view-anchored / non-file step: no code anchor. Leave the code
+    -- window untouched, clear any prior highlight, and wire nav maps on the
+    -- current buffer so ]t/[t/q work without having to focus the float.
+    --
+    -- An unsupported `view` is not an anchor we can honor in the MVP, so it
+    -- degrades to narrating the description — but visibly, with a notice.
+    if step.view ~= nil and step.view ~= "" then
+      notify_step("unsupported view '" .. tostring(step.view) .. "'; showing description")
+    end
+    clear_highlight()
+    set_maps(vim.api.nvim_get_current_buf())
+  elseif not file_exists(step.file) then
+    -- A file step pointing at a path that doesn't exist must not silently open
+    -- an empty [New File] buffer (NCT-001 carry-over): notify and narrate only.
+    notify_step("file " .. step.file .. " not found")
     clear_highlight()
     set_maps(vim.api.nvim_get_current_buf())
   else
+    -- An anchor the resolver couldn't pin (e.g. a pattern that matched nothing)
+    -- degrades to the file's top with a warning; navigation keeps working.
+    if resolution.kind == "unresolved" then
+      local detail = resolution.reason and (" (" .. resolution.reason .. ")") or ""
+      notify_step("could not resolve anchor in " .. step.file .. detail)
+    end
     render_code(step, resolution)
   end
 

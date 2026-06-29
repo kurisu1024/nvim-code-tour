@@ -13,6 +13,7 @@
 -- resolve_root(start?) -> absolute workspace root (git root, else cwd).
 
 local json = require("codetour.core.json")
+local schema = require("codetour.core.schema")
 
 local M = {}
 
@@ -42,8 +43,14 @@ local function is_primary_title(title)
   return title:match(PRIMARY_TITLE) ~= nil
 end
 
--- Peek at a tour file's metadata without normalizing it. Returns nil (skip) when
--- the file is unreadable, isn't valid JSON, or lacks a usable title/steps.
+-- Peek at a tour file's metadata without normalizing it.
+--
+-- Resilience posture (NCT-008): a file that is unreadable or not valid JSON has
+-- no recoverable identity, so it is skipped (returns nil). A file that *is*
+-- parseable JSON but structurally invalid (no title, no steps, or no valid
+-- steps) is NOT hidden — it surfaces flagged `broken = true` (with a filename
+-- fallback for a missing title) so the picker can list it rather than silently
+-- dropping it. `step_count` reflects the count of *valid* steps.
 local function read_meta(path)
   local ok_read, lines = pcall(vim.fn.readfile, path)
   if not ok_read then
@@ -55,21 +62,22 @@ local function read_meta(path)
     return nil
   end
 
+  local result = schema.validate(raw)
+  local broken = #result.errors > 0
+
   local title = raw.title
   if type(title) ~= "string" or title == "" then
-    return nil
-  end
-
-  local steps = raw.steps
-  if type(steps) ~= "table" or vim.tbl_isempty(steps) then
-    return nil
+    -- No usable title: fall back to the file stem so the broken tour still has
+    -- a stable display identity in the list.
+    title = vim.fn.fnamemodify(path, ":t:r")
   end
 
   return {
     path = path,
     title = title,
-    step_count = #steps,
+    step_count = #result.valid_steps,
     is_primary = raw.isPrimary == true or is_primary_title(title),
+    broken = broken,
   }
 end
 
