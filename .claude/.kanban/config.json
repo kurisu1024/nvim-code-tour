@@ -1,0 +1,6 @@
+{
+  "scope": "project",
+  "columns": ["backlog", "todo", "doing", "review", "done"],
+  "idCounters": { "EPIC": 1, "ISS": 0, "NCT": 9 },
+  "settings": { "defaultStatus": "backlog", "groupBoardByEpic": true }
+}
