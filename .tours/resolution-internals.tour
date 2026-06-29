@@ -1,0 +1,71 @@
+{
+  "$schema": "https://aka.ms/codetour-schema",
+  "title": "2 - Edge Cases: Anchors, Patterns & Highlighting",
+  "description": "A deeper, more technical pass over the resolution and rendering seams: the JS→Vim regex translator, multi-line selection highlights, content-resolved `pattern` anchors, and the markdown link map. This tour deliberately exercises the trickier renderer paths — multi-line selection extmarks, fenced code blocks in the narrator, and `<CR>`-followable links.",
+  "ref": "main",
+  "steps": [
+    {
+      "directory": "lua/codetour/core",
+      "title": "The resolution engine",
+      "description": "## Where anchors become locations\n\nEverything in `core/` is pure and headless — it turns a typed step into *where the code window should land* without ever opening a window.\n\nThis tour walks the parts the happy-path tour skimmed:\n\n- `jsregex.lua` — JS regex → Vim regex translation\n- `anchor.lua` — the `pattern` resolution branch\n- `highlight.lua` — multi-line selection extmarks\n- `markdown.lua` — the link map behind `<CR>`-follow\n\n**Gotcha:** none of these import the UI. They return plans; the player turns plans into windows."
+    },
+    {
+      "file": "lua/codetour/core/anchor.lua",
+      "selection": { "start": { "line": 26 }, "end": { "line": 47 } },
+      "title": "Resolving a pattern to a line",
+      "description": "**Situation:** a step with a `pattern` and no `line` lands here. **Mechanism:** the JS pattern is translated to Vim's dialect, compiled with `vim.regex`, and scanned line by line — first match wins:\n\n```lua\nfor idx, text in ipairs(file_lines) do\n  if re:match_str(text) then\n    return { kind = \"line\", line = idx }  -- first match wins\n  end\nend\n```\n\n**Implication:** every failure mode (untranslatable pattern, no content, no match) degrades to `unresolved` with a reason — never an error. **Gotcha:** this very step is selection-anchored, so you're seeing `highlight.apply_selection` draw a multi-line region right now — the edge case step 6 covers."
+    },
+    {
+      "file": "lua/codetour/core/jsregex.lua",
+      "pattern": "function M\\.translate",
+      "title": "Pattern anchor: the translator entry",
+      "description": "**This step has no `line` — it found itself by content.** The anchor was the pattern `function M\\\\.translate`, resolved through the very code it points at.\n\n**Mechanism:** `translate` forces very-magic (`\\v`) and walks the JS pattern token by token, mapping the common subset:\n\n```text\nJS            Vim (very-magic)\n----------    ----------------\n(?:group)  -> %(group)\n(?=ahead)  -> (ahead)@=\n(?<=back)  -> (back)@<=\nshorthand  -> carried through unchanged\n```\n\n**Implication:** patterns survive edits that shift line numbers — the resilient way to anchor volatile files. **Gotcha:** anything outside the subset (backreferences, word boundaries, lazy quantifiers) returns `nil` plus a reason, and the step degrades to the file top with a notice."
+    },
+    {
+      "file": "lua/codetour/core/jsregex.lua",
+      "selection": { "start": { "line": 36 }, "end": { "line": 74 } },
+      "title": "Reading a character class",
+      "description": "**Situation:** bracket classes are their own little grammar, so they get a dedicated reader. **Mechanism:** it walks until the closing brace, mapping the JS shorthands to POSIX bodies because Vim does not understand the shorthands *inside* a class:\n\n```lua\nlocal CLASS_POSIX = {\n  d = \"digit\",        -- maps to the POSIX digit class\n  w = \"alnum plus _\", -- word chars\n  s = \"space\",\n}\n```\n\n**Implication:** a class made of word/dot/dash translates cleanly; the negated shorthands are explicitly rejected. **Gotcha:** an unterminated class returns a reason rather than scanning off the end of the string — note the `closed` flag guard at the bottom of this selection."
+    },
+    {
+      "file": "lua/codetour/core/jsregex.lua",
+      "selection": { "start": { "line": 129 }, "end": { "line": 159 } },
+      "title": "Groups & lookaround, reordered",
+      "description": "**Situation:** JS writes lookaround as a *prefix* construct; Vim writes it as a *postfix* suffix on the group. **Mechanism:** a stack remembers the suffix to append when the matching close-paren arrives, so a positive lookahead becomes a group followed by `@=`:\n\n```lua\nelseif rest2 == \"?=\" then\n  table.insert(out, \"(\")\n  table.insert(group_suffix, \"@=\")  -- applied at the close paren\n```\n\n**Implication:** balanced nesting just works — the stack handles arbitrary depth. **Gotcha:** named groups and inline flags fall through to a single \"unsupported group construct\" bail, keeping the translator's contract simple."
+    },
+    {
+      "file": "lua/codetour/ui/highlight.lua",
+      "selection": { "start": { "line": 36 }, "end": { "line": 62 } },
+      "title": "Multi-line selection extmarks",
+      "description": "**The meta step: a function about highlighting, shown as a highlight.** **Mechanism:** a CodeTour `selection` carries 1-based `start`/`end` with `line` and `character`. This clamps both ends to the buffer, swaps them if reversed, and emits *one* region extmark that runs through the end of the last line:\n\n```lua\n-- end_col = length of the last selected line, so the\n-- whole span reads as one block (not just line one)\nset_extmark(buf, ns, start_row, start_col, {\n  end_row = end_row,\n  end_col = end_col,\n  hl_group = \"CodeTourLine\",\n})\n```\n\n**Implication:** the full multi-line span highlights as a block. **Gotcha:** a bare `line` step uses `apply` (a single `line_hl_group`) instead — two different extmark shapes for two anchor kinds."
+    },
+    {
+      "file": "lua/codetour/ui/highlight.lua",
+      "line": 13,
+      "title": "The highlight group (a single-line anchor)",
+      "description": "**Contrast with the last step:** this one is a plain `line` anchor — one line, highlighted via `line_hl_group`. **Mechanism:** `CodeTourLine` links to `Visual` with `default = true`, so a user's colorscheme or config can override it without us clobbering their choice:\n\n```lua\nvim.api.nvim_set_hl(0, \"CodeTourLine\", { link = \"Visual\", default = true })\n```\n\n**Implication:** zero theme assumptions. **Gotcha:** the namespace is *named* `codetour` (not anonymous) specifically so `:checkhealth` and the tests can find it via `nvim_get_namespaces()`."
+    },
+    {
+      "file": "lua/codetour/core/markdown.lua",
+      "pattern": "local function parse_line",
+      "title": "The link map (pattern-anchored)",
+      "description": "**Found by content again** — the pattern `local function parse_line`. **Mechanism:** every bracketed token on a line is extracted into a link with its byte span, so the float can hit-test the link under the cursor on `<CR>` without re-parsing. The links in *this very description* exercise each kind:\n\n- step ref → [#1]\n- tour ref → [1 - Playback Happy Path]\n- tour+step ref → [1 - Playback Happy Path#3]\n- file ref → [open anchor.lua](lua/codetour/core/anchor.lua)\n- inert → [delete everything](command:workbench.action.terminal.kill)\n\n**Gotcha:** that last one targets `command:` — rendered **inert on purpose**. The engine never executes anything on your behalf, so it carries no action even though it looks like a link. Put your cursor on each and press `<CR>` to feel the difference."
+    },
+    {
+      "file": "lua/codetour/core/markdown.lua",
+      "selection": { "start": { "line": 74 }, "end": { "line": 99 } },
+      "title": "File ref vs step/tour ref",
+      "description": "**Situation:** the disambiguation that makes the link map work. **Mechanism:** a bracketed token immediately followed by an open paren is a file ref (label, then path in parens); otherwise the bracket content is classified as a step, tour, or tour+step ref:\n\n```lua\nif text:sub(e + 1, e + 1) == \"(\" then\n  -- followed by a paren  -> file reference\nelse\n  -- no paren            -> step / tour / tour+step ref\nend\n```\n\n**Implication:** one pass, source-ordered, no regex engine needed — Lua's `%b` balanced matches do the parsing. **Gotcha:** `command:` targets are filtered out in *both* branches, so there's no syntactic way to smuggle an executable link through."
+    },
+    {
+      "file": "lua/codetour/core/schema.lua",
+      "selection": { "start": { "line": 38 }, "end": { "line": 52 } },
+      "title": "Lenient, per-step validation",
+      "description": "**Situation:** the posture that lets broken tours still be useful. **Mechanism:** a step missing its required `description` is dropped into `skipped` (with an index and reason) rather than sinking the tour — but a tour whose *every* step drops is fatally invalid:\n\n```lua\nif #valid_steps == 0 and #errors == 0 then\n  table.insert(errors, \"tour has no valid steps\")\nend\n```\n\n**Implication:** discovery can surface a partially-broken tour flagged `broken` in the picker instead of hiding it. **Gotcha:** tour-level problems (no title, no steps) are *fatal* and skip the file; step-level problems are *recoverable* and merely trim the step list."
+    },
+    {
+      "title": "Edge cases, covered",
+      "description": "## What this tour exercised\n\n```text\nselection anchors  -> multi-line region extmarks (steps 2,4,5,6,9,10)\npattern anchors    -> content resolution, no line (steps 3,8)\nline anchor        -> single-line line_hl_group (step 7)\nfenced code blocks -> Treesitter markdown in the float (throughout)\nlink map           -> step / tour / tour+step / file / inert (step 8)\n```\n\nThe float is `filetype=markdown`, so every fenced block you saw was syntax-highlighted by Treesitter — no extra dependency. For the end-to-end playback flow, jump back to [1 - Playback Happy Path]. From here the natural next move is recording: turning a live selection into one of these `selection` steps."
+    }
+  ]
+}
