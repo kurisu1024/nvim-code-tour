@@ -2,7 +2,7 @@
 id: NCT-004
 type: story
 epic: NCT
-status: backlog
+status: done
 priority: high
 size: L
 labels: [ready-for-agent]
