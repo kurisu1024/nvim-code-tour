@@ -8,6 +8,7 @@
 -- memory so resume() re-enters where you left off.
 
 local config = require("codetour.config")
+local anchor = require("codetour.core.anchor")
 local markdown = require("codetour.core.markdown")
 local codewin = require("codetour.ui.codewin")
 local highlight = require("codetour.ui.highlight")
@@ -68,28 +69,43 @@ local function clear_highlight()
   end
 end
 
+-- Open a file-anchored step's resolution (line or selection) in the code window.
+local function render_code(step, resolution)
+  local sel = resolution.selection
+  local col = sel and math.max(0, (sel.start.character or 1) - 1) or 0
+  local buf, win = codewin.open(state.code_win, state.root, step.file, resolution.line, col)
+  if buf and win then
+    state.code_win = win -- codewin may have resolved a different, usable window
+    clear_highlight()
+    highlight.clear(buf)
+    if resolution.kind == "selection" then
+      highlight.apply_selection(buf, sel)
+    elseif resolution.line then
+      highlight.apply(buf, resolution.line)
+    end
+    state.hl_buf = buf
+    set_maps(buf)
+  else
+    -- No safe window to open into; narrate only, drop any stale anchor, but
+    -- still wire nav keys on whatever buffer the user is looking at.
+    clear_highlight()
+    set_maps(vim.api.nvim_get_current_buf())
+  end
+end
+
 -- Render the current step end to end.
 local function render()
   local step = state.tour.steps[state.index]
+  local resolution = anchor.resolve(step)
 
-  if step.type == "file" and step.file then
-    local buf, win = codewin.open(state.code_win, state.root, step.file, step.line)
-    if buf and win then
-      state.code_win = win -- codewin may have resolved a different, usable window
-      clear_highlight()
-      highlight.clear(buf)
-      if step.line then
-        highlight.apply(buf, step.line)
-      end
-      state.hl_buf = buf
-      set_maps(buf)
-    else
-      -- No safe window to open into; narrate only, drop any stale anchor.
-      clear_highlight()
-    end
-  else
-    -- Non-file step (content): no code anchor, so clear the prior highlight.
+  if resolution.kind == "content" or not step.file then
+    -- Content step: no code anchor. Leave the code window untouched, clear any
+    -- prior highlight, and wire nav maps on the current buffer so ]t/[t/q work
+    -- without having to focus the float.
     clear_highlight()
+    set_maps(vim.api.nvim_get_current_buf())
+  else
+    render_code(step, resolution)
   end
 
   local parsed = markdown.parse(step.description)

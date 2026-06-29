@@ -33,9 +33,11 @@ local function pick_win(preferred)
   return nil
 end
 
--- open(preferred_win, root, file, line) -> (bufnr, win) | (nil, nil)
+-- open(preferred_win, root, file, line, col?) -> (bufnr, win) | (nil, nil)
 -- Returns nil,nil when no safe window exists; the caller then narrates only.
-function M.open(preferred_win, root, file, line)
+-- `col` is an optional 0-based column for the cursor (selection steps land the
+-- cursor on the selection's start character); it defaults to the start of line.
+function M.open(preferred_win, root, file, line, col)
   local win = pick_win(preferred_win)
   if not win then
     return nil, nil
@@ -56,9 +58,13 @@ function M.open(preferred_win, root, file, line)
   local buf = vim.api.nvim_win_get_buf(win)
   local count = vim.api.nvim_buf_line_count(buf)
   local target = math.max(1, math.min(line or 1, count))
+  -- Clamp the column to the target line so a selection's start character can't
+  -- push the cursor past the line's end.
+  local line_text = vim.api.nvim_buf_get_lines(buf, target - 1, target, false)[1] or ""
+  local target_col = math.max(0, math.min(col or 0, #line_text))
   -- Set the cursor on the explicit win: autocommands fired by :edit may have
   -- shifted the current window out from under us.
-  vim.api.nvim_win_set_cursor(win, { target, 0 })
+  vim.api.nvim_win_set_cursor(win, { target, target_col })
   return buf, win
 end
 

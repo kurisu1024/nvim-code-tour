@@ -1,6 +1,14 @@
 -- Minimal init for headless plenary test runs.
 -- Puts this plugin and plenary.nvim on the runtimepath, nothing else.
 
+-- PlenaryBustedDirectory runs spec files as parallel headless nvim jobs. Several
+-- specs `:edit` the same fixture (tests/fixtures/repo/src/example.lua) at once,
+-- so leaving swapfiles on produces an E325 swap conflict in whichever process
+-- loses the race — that file then opens without honouring the requested cursor
+-- position, intermittently failing cursor-line assertions. No headless test ever
+-- wants a swapfile; turn them off so fixture edits are deterministic.
+vim.o.swapfile = false
+
 local function add_to_rtp(path)
   if path and vim.uv.fs_stat(path) then
     vim.opt.runtimepath:append(path)
