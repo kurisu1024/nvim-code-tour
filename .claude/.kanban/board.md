@@ -4,11 +4,7 @@ _Legend: ◆ high · ▣ medium · ○ low_
 
 ## backlog
 
-### EPIC-001 · nvim-code-tour ◆
-
-| ID | Title | Pri | Size | Blocked by |
-|----|-------|-----|------|-----------|
-| NCT-009 | Config, commands, checkhealth & resume | ▣ | M | NCT-001 |
+_(empty)_
 
 ## todo
 
@@ -36,3 +32,4 @@ _(empty)_
 | NCT-006 | Follow links + nextTour chaining | ▣ | M | NCT-001, NCT-002 |
 | NCT-007 | Git `ref` drift warning | ▣ | S | NCT-001 |
 | NCT-008 | Resilience & graceful degradation | ◆ | M | NCT-001 |
+| NCT-009 | Config, commands, checkhealth & resume | ▣ | M | NCT-001 |
