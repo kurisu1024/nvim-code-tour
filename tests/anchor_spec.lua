@@ -63,3 +63,42 @@ describe("core.anchor.resolve", function()
     assert.equals(before, #vim.api.nvim_list_bufs())
   end)
 end)
+
+-- NCT-004 integration: pattern resolution via core/jsregex, in the kind shape.
+describe("core.anchor.resolve pattern steps", function()
+  local lines = { "local M = {}", "function M.greet()", "  return 'hi'", "end" }
+
+  it("resolves a pattern step to the first matching line", function()
+    local r = anchor.resolve(step_of({ description = "d", file = "a.lua", pattern = "function" }), lines)
+    assert.equals("line", r.kind)
+    assert.equals(2, r.line)
+  end)
+
+  it("first match wins for a pattern that occurs more than once", function()
+    local r = anchor.resolve(step_of({ description = "d", file = "a.lua", pattern = "M|return" }), lines)
+    assert.equals("line", r.kind)
+    assert.equals(1, r.line)
+  end)
+
+  it("honors line > pattern precedence", function()
+    local r = anchor.resolve(step_of({ description = "d", file = "a.lua", line = 3, pattern = "function" }), lines)
+    assert.equals("line", r.kind)
+    assert.equals(3, r.line)
+  end)
+
+  it("degrades an untranslatable pattern to unresolved, never crashing", function()
+    local r = anchor.resolve(step_of({ description = "d", file = "a.lua", pattern = "\\bword\\b" }), { "a word" })
+    assert.equals("unresolved", r.kind)
+    assert.is_string(r.reason)
+  end)
+
+  it("degrades a non-matching pattern to unresolved", function()
+    local r = anchor.resolve(step_of({ description = "d", file = "a.lua", pattern = "zzz" }), lines)
+    assert.equals("unresolved", r.kind)
+  end)
+
+  it("degrades to unresolved when no file lines are available to scan", function()
+    local r = anchor.resolve(step_of({ description = "d", file = "a.lua", pattern = "function" }))
+    assert.equals("unresolved", r.kind)
+  end)
+end)

@@ -128,6 +128,17 @@ describe("player", function()
     assert.equals(0, #code_line_extmarks())
   end)
 
+  it("resolves a pattern step and lands the cursor on the matched line", function()
+    local tour = model.normalize({
+      title = "Pattern",
+      steps = { { description = "the fn", file = "src/example.lua", pattern = "function" } },
+    })
+    player.start(tour, { root = fixtures, step = 1 })
+
+    assert.is_true(vim.endswith(vim.api.nvim_buf_get_name(0), "src/example.lua"))
+    assert.equals(3, vim.api.nvim_win_get_cursor(0)[1]) -- "function M.greet(name)"
+  end)
+
   it("retains state so resume re-enters the last step", function()
     player.start(make_tour(), { root = fixtures, step = 1 })
     player.next()

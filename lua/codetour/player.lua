@@ -118,11 +118,25 @@ local function render_code(step, resolution)
   end
 end
 
+-- Pattern steps need the file's lines to scan; read them lazily (only when a
+-- pattern actually has to be resolved) so line/selection steps stay I/O-free.
+local function pattern_lines(step)
+  if step.type ~= "file" or not step.file or step.pattern == nil or step.line ~= nil then
+    return nil
+  end
+  local path = step.file
+  if state.root and not vim.startswith(path, "/") then
+    path = state.root .. "/" .. path
+  end
+  local ok, lines = pcall(vim.fn.readfile, vim.fn.fnamemodify(path, ":p"))
+  return ok and lines or nil
+end
+
 -- Render the current step end to end.
 local function render()
   maybe_notify_drift()
   local step = state.tour.steps[state.index]
-  local resolution = anchor.resolve(step)
+  local resolution = anchor.resolve(step, pattern_lines(step))
 
   if resolution.kind == "content" or not step.file then
     -- Content step: no code anchor. Leave the code window untouched, clear any
