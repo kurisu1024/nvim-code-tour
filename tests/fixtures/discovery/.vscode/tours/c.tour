@@ -1,0 +1,8 @@
+{
+  "title": "Gamma",
+  "steps": [
+    { "description": "one" },
+    { "description": "two" },
+    { "description": "three" }
+  ]
+}

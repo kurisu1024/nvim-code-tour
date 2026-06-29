@@ -1,0 +1,8 @@
+{
+  "title": "Alpha",
+  "description": "A tour in .tours/",
+  "steps": [
+    { "file": "src/a.lua", "line": 1, "description": "step one" },
+    { "file": "src/a.lua", "line": 2, "description": "step two" }
+  ]
+}
