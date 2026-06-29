@@ -30,7 +30,12 @@ local function resolve_root(opts)
 end
 
 local function load_tour(path)
-  local lines = vim.fn.readfile(path)
+  -- A file discovered by the glob can vanish or become unreadable before we read
+  -- it; that must skip the file, not crash discovery.
+  local read_ok, lines = pcall(vim.fn.readfile, path)
+  if not read_ok then
+    return nil, "unreadable: " .. tostring(lines)
+  end
   local ok, raw = json.decode(table.concat(lines, "\n"))
   if not ok then
     return nil, "bad JSON: " .. tostring(raw)
@@ -80,7 +85,7 @@ end
 -- Delegate the navigation surface to the player.
 M.next = player.next
 M.prev = player.prev
-M.goto = player.goto
+M["goto"] = player["goto"] -- `goto` is a reserved word; index form is portable
 M.resume = player.resume
 M.stop = player.stop
 

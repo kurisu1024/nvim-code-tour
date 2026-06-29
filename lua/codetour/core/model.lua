@@ -14,30 +14,43 @@ local schema = require("codetour.core.schema")
 
 local M = {}
 
--- Resolve a step's anchor kind. Precedence is fixed so a step with both a
--- directory and a file is treated as directory-anchored, etc.
-local function step_type(raw)
-  if raw.directory ~= nil then
+-- JSON null decodes to vim.NIL (a truthy userdata), which slips through Lua nil
+-- guards and then crashes downstream string/number ops. Strip it at the
+-- normalize boundary so the rest of the engine only ever sees real values or nil.
+local function denil(v)
+  if v == nil or v == vim.NIL then
+    return nil
+  end
+  return v
+end
+
+-- Resolve a step's anchor kind from already-cleaned values. Precedence is fixed
+-- so a step with both a directory and a file is treated as directory-anchored.
+local function step_type(file, directory, uri)
+  if directory ~= nil then
     return "directory"
-  elseif raw.file ~= nil then
+  elseif file ~= nil then
     return "file"
-  elseif raw.uri ~= nil then
+  elseif uri ~= nil then
     return "uri"
   end
   return "content"
 end
 
 local function normalize_step(raw)
+  local file = denil(raw.file)
+  local directory = denil(raw.directory)
+  local uri = denil(raw.uri)
   return {
-    type = step_type(raw),
+    type = step_type(file, directory, uri),
     description = raw.description,
-    title = raw.title,
-    file = raw.file,
-    line = raw.line,
-    pattern = raw.pattern,
-    directory = raw.directory,
-    uri = raw.uri,
-    selection = raw.selection,
+    title = denil(raw.title),
+    file = file,
+    line = denil(raw.line),
+    pattern = denil(raw.pattern),
+    directory = directory,
+    uri = uri,
+    selection = denil(raw.selection),
   }
 end
 
@@ -54,8 +67,8 @@ function M.normalize(raw)
 
   return {
     title = raw.title,
-    description = raw.description,
-    ref = raw.ref,
+    description = denil(raw.description),
+    ref = denil(raw.ref),
     steps = steps,
     skipped = result.skipped,
   }

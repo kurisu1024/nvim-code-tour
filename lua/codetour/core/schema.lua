@@ -45,6 +45,12 @@ function M.validate(raw)
     end
   end
 
+  -- A tour whose every step was dropped has nothing to play — fatal, so the file
+  -- is skipped with a notice rather than starting and silently showing nothing.
+  if #valid_steps == 0 and #errors == 0 then
+    table.insert(errors, "tour has no valid steps")
+  end
+
   return { errors = errors, valid_steps = valid_steps, skipped = skipped }
 end
 

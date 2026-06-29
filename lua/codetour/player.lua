@@ -60,21 +60,36 @@ local function teardown_ui()
   end
 end
 
+-- Drop the line highlight carried by the previous step, wherever it landed.
+local function clear_highlight()
+  if state.hl_buf then
+    highlight.clear(state.hl_buf)
+    state.hl_buf = nil
+  end
+end
+
 -- Render the current step end to end.
 local function render()
   local step = state.tour.steps[state.index]
 
   if step.type == "file" and step.file then
-    local buf = codewin.open(state.code_win, state.root, step.file, step.line)
-    if state.hl_buf and state.hl_buf ~= buf then
-      highlight.clear(state.hl_buf)
+    local buf, win = codewin.open(state.code_win, state.root, step.file, step.line)
+    if buf and win then
+      state.code_win = win -- codewin may have resolved a different, usable window
+      clear_highlight()
+      highlight.clear(buf)
+      if step.line then
+        highlight.apply(buf, step.line)
+      end
+      state.hl_buf = buf
+      set_maps(buf)
+    else
+      -- No safe window to open into; narrate only, drop any stale anchor.
+      clear_highlight()
     end
-    highlight.clear(buf)
-    if step.line then
-      highlight.apply(buf, step.line)
-    end
-    state.hl_buf = buf
-    set_maps(buf)
+  else
+    -- Non-file step (content): no code anchor, so clear the prior highlight.
+    clear_highlight()
   end
 
   local parsed = markdown.parse(step.description)
@@ -97,12 +112,14 @@ function M.start(tour, opts)
   state.tour = tour
   state.index = 0
   state.root = opts.root or vim.fn.getcwd()
+  -- Preferred code window; codewin.open re-resolves if it isn't usable.
   state.code_win = vim.api.nvim_get_current_win()
   state.renderer = renderer.new()
-  M.goto(opts.step or 1)
+  M["goto"](opts.step or 1)
 end
 
-function M.goto(n)
+-- `goto` is a Lua reserved word; the index form is portable across runtimes.
+M["goto"] = function(n)
   if not state.tour then
     return
   end
@@ -114,18 +131,15 @@ function M.goto(n)
   if not state.renderer then
     state.renderer = renderer.new()
   end
-  if not (state.code_win and vim.api.nvim_win_is_valid(state.code_win)) then
-    state.code_win = vim.api.nvim_get_current_win()
-  end
   render()
 end
 
 function M.next()
-  M.goto(state.index + 1)
+  M["goto"](state.index + 1)
 end
 
 function M.prev()
-  M.goto(state.index - 1)
+  M["goto"](state.index - 1)
 end
 
 -- Tear down the UI but keep tour + step for resume().
@@ -138,9 +152,13 @@ function M.resume()
     vim.notify("codetour: no tour to resume", vim.log.levels.INFO)
     return
   end
-  state.code_win = vim.api.nvim_get_current_win()
+  -- Keep a still-valid code window; only fall back to the current one if the
+  -- retained handle is gone (codewin.open makes the final safe choice anyway).
+  if not (state.code_win and vim.api.nvim_win_is_valid(state.code_win)) then
+    state.code_win = vim.api.nvim_get_current_win()
+  end
   state.renderer = renderer.new()
-  M.goto(state.index < 1 and 1 or state.index)
+  M["goto"](state.index < 1 and 1 or state.index)
 end
 
 return M

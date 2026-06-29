@@ -16,7 +16,7 @@ function M.dispatch(fargs)
   elseif sub == "prev" then
     ct.prev()
   elseif sub == "goto" then
-    ct.goto(tonumber(fargs[2]) or 1)
+    ct["goto"](tonumber(fargs[2]) or 1)
   elseif sub == "resume" then
     ct.resume()
   elseif sub == "end" then
@@ -33,6 +33,7 @@ function M.register()
     M.dispatch(opts.fargs)
   end, {
     nargs = "*",
+    force = true, -- plugin/ bootstrap + setup() both register; don't E174 on the second
     desc = "Play CodeTour .tour files",
     complete = function(arglead)
       return vim.tbl_filter(function(name)
