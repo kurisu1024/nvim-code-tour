@@ -9,8 +9,11 @@
 
 local config = require("codetour.config")
 local anchor = require("codetour.core.anchor")
+local discovery = require("codetour.core.discovery")
 local git = require("codetour.core.git")
+local json = require("codetour.core.json")
 local markdown = require("codetour.core.markdown")
+local model = require("codetour.core.model")
 local codewin = require("codetour.ui.codewin")
 local highlight = require("codetour.ui.highlight")
 local renderer = require("codetour.ui.renderer")
@@ -132,6 +135,69 @@ local function pattern_lines(step)
   return ok and lines or nil
 end
 
+-- Load + normalize a tour file off disk. Resilient: a vanished/unreadable/bad
+-- file yields nil, never an error (tour-link/chain resolution then notifies).
+local function load_tour(path)
+  local read_ok, lines = pcall(vim.fn.readfile, path)
+  if not read_ok then
+    return nil
+  end
+  local ok, raw = json.decode(table.concat(lines, "\n"))
+  if not ok then
+    return nil
+  end
+  return (model.normalize(raw)) -- drop the error tail; nil is enough here
+end
+
+-- Resolve a tour by title against the discovered set under the active root and
+-- start it at `step`. Returns true when a tour was started. Shared by tour-ref
+-- links and `nextTour` chaining (one tour-resolution path, per the design).
+local function follow_tour(title, step)
+  if not title or title == "" or not state.root then
+    return false
+  end
+  local tours = discovery.find(state.root, { tour_dir = config.get().tour_dir })
+  for _, meta in ipairs(tours) do
+    if meta.title == title then
+      local tour = load_tour(meta.path)
+      if tour then
+        M.start(tour, { root = state.root, step = step })
+        return true
+      end
+    end
+  end
+  vim.notify("codetour: tour not found: " .. title, vim.log.levels.WARN)
+  return false
+end
+
+-- Open a file-ref target in the code window with no anchor (cursor at the top).
+-- Path is workspace-relative per the CodeTour spec; codewin handles resolution
+-- and window safety. Never executes anything.
+local function open_file(path)
+  if not path or path == "" then
+    return
+  end
+  local _, win = codewin.open(state.code_win, state.root, path, nil, 0)
+  if win then
+    state.code_win = win
+  end
+end
+
+-- Dispatch a markdown link action selected via `<CR>` in the narrator float.
+-- Degrade-notify-continue: an unknown or malformed action is simply ignored.
+function M.follow(action)
+  if type(action) ~= "table" then
+    return
+  end
+  if action.kind == "step" then
+    M["goto"](action.step)
+  elseif action.kind == "tour" then
+    follow_tour(action.title, action.step or 1)
+  elseif action.kind == "file" then
+    open_file(action.path)
+  end
+end
+
 -- Render the current step end to end.
 local function render()
   maybe_notify_drift()
@@ -151,10 +217,11 @@ local function render()
   local parsed = markdown.parse(step.description)
   state.renderer:present({
     lines = parsed.lines,
+    links = parsed.links,
     counter = string.format("%d/%d", state.index, #state.tour.steps),
     title = step.title,
     keymaps = config.get().keymaps,
-    actions = { next = M.next, prev = M.prev, stop = M.stop, follow = function() end },
+    actions = { next = M.next, prev = M.prev, stop = M.stop, follow = M.follow },
   })
 end
 
@@ -192,6 +259,17 @@ M["goto"] = function(n)
 end
 
 function M.next()
+  if not state.tour then
+    return
+  end
+  -- At the end of a tour that names a successor, chain onward by title through
+  -- the same tour-resolution path as a tour-ref link.
+  if state.index >= #state.tour.steps then
+    local next_tour = state.tour.nextTour
+    if next_tour and next_tour ~= "" and follow_tour(next_tour, 1) then
+      return
+    end
+  end
   M["goto"](state.index + 1)
 end
 
