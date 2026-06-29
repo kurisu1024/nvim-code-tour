@@ -2,14 +2,26 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
-## Status: greenfield — read this first
+## Status: MVP built
 
-This repository is **empty**. There is no source code, no build system, no tests, and
-no chosen tech stack yet. Do not search for an implementation, build/lint/test commands,
-or an existing architecture — none exist. If a task assumes code is already here, that is
-the gap to report, not something to hunt for.
+The plugin is implemented in **Lua** (Neovim 0.10+ floor) with the full playback MVP on
+`main`. Stack: Telescope is the only hard runtime dep (confined to the `ui/picker` seam);
+tests run under **plenary/busted**.
 
-When the stack is chosen, replace this section with the real build/run/test commands.
+**Build / run / test:**
+- `make test` — run the whole suite headless (plenary `PlenaryBustedDirectory`).
+- `make test-file FILE=tests/foo_spec.lua` — run one spec (reliable exit code; the
+  directory-runner's aggregate exit code is flaky, so trust per-file `Failed/Errors: 0`).
+
+**Layout** (matches the design spec §7): `lua/codetour/` — `init`, `config`, `command`,
+`player`, `core/{json,schema,model,discovery,jsregex,anchor,markdown,git}`,
+`ui/{renderer,float,codewin,highlight,picker}`; `plugin/codetour.lua`; `tests/*_spec.lua`
++ `tests/fixtures/`.
+
+**Architecture:** layered core (pure, headless) → `player` conductor → swappable UI
+adapters behind the `Renderer` seam. The core never imports Telescope or opens windows.
+See `docs/superpowers/specs/2026-06-28-nvim-code-tour-design.md` for the full design and
+`.claude/.kanban/` for story status.
 
 ## What we are building
 
